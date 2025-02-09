@@ -11,15 +11,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-TEST_MODE = True  # Set to False for live trading
-INITIAL_BALANCE = 1000  # USDT for backtesting
-TRADE_SYMBOL = 'BNBUSDT'
-TRADE_QUANTITY = 1  # Amount of coins to trade
-SHORT_SMA = 20
-LONG_SMA = 50
-INTERVAL = Client.KLINE_INTERVAL_15MINUTE  # 15 min candles
-LOOKBACK = 4*24*5  # Amount of historical data to fetch
-TRADING_FEE = 0.001  # 0.1% trading fee
+TEST_MODE = os.getenv('TEST_MODE', 'True')
+INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', 1000))
+TRADE_SYMBOL = os.getenv('TRADE_SYMBOL', 'BNBUSDT')
+TRADE_QUANTITY = float(os.getenv('TRADE_QUANTITY', 1))
+SHORT_SMA = int(os.getenv('SHORT_SMA', 20))
+LONG_SMA = int(os.getenv('LONG_SMA', 50))
+INTERVAL = os.getenv('INTERVAL', Client.KLINE_INTERVAL_15MINUTE)
+LOOKBACK = int(os.getenv('LOOKBACK', 4*24*5))
+TRADING_FEE = float(os.getenv('TRADING_FEE', 0.001))
 
 # Binance API Configuration
 API_KEY = os.getenv('API_KEY')
