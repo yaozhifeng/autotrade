@@ -159,6 +159,28 @@ def sell():
     else:
         print(f"Insufficient {TRADE_SYMBOL.replace('USDT', '')} balance to place sell order")
 
+def check_portfolio_value():
+    """Check and print the live portfolio value including USDT and the worth of the target coin"""
+    try:
+        # Get USDT balance
+        usdt_balance = client.get_asset_balance(asset='USDT')
+        usdt_value = float(usdt_balance['free']) if usdt_balance else 0.0
+
+        # Get target coin balance
+        target_coin = TRADE_SYMBOL.replace('USDT', '')
+        coin_balance = client.get_asset_balance(asset=target_coin)
+        coin_value = float(coin_balance['free']) if coin_balance else 0.0
+
+        # Get current price of the target coin in USDT
+        coin_price = float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price'])
+
+        # Calculate total portfolio value in USDT
+        total_value = usdt_value + (coin_value * coin_price)
+
+        print(f"Portfolio Value: ${total_value:.2f} (USDT: ${usdt_value:.2f}, {target_coin}: {coin_value:.6f} @ ${coin_price:.2f})")
+    except Exception as e:
+        print("An error occurred while checking portfolio value:", e)
+
 def live_trading():
     """Execute live trading based on SMA strategy"""
     print("\nStarting live trading...")
