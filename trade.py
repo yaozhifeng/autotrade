@@ -1,6 +1,5 @@
-
 from binance.client import Client
-#from binance.enums import *
+from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_MARKET
 import pandas as pd
 #import numpy as np
 import time
@@ -14,12 +13,12 @@ load_dotenv()
 # Configuration
 TEST_MODE = True  # Set to False for live trading
 INITIAL_BALANCE = 1000  # USDT for backtesting
-TRADE_SYMBOL = 'DOGEUSDT'
-TRADE_QUANTITY = 2000  # Amount of coins to trade
+TRADE_SYMBOL = 'BNBUSDT'
+TRADE_QUANTITY = 1  # Amount of coins to trade
 SHORT_SMA = 20
 LONG_SMA = 50
-INTERVAL = Client.KLINE_INTERVAL_15MINUTE  # 1-hour candles
-LOOKBACK = 4*24*2  # Amount of historical data to fetch
+INTERVAL = Client.KLINE_INTERVAL_15MINUTE  # 15 min candles
+LOOKBACK = 4*24*4  # Amount of historical data to fetch
 TRADING_FEE = 0.001  # 0.1% trading fee
 
 # Binance API Configuration
@@ -150,7 +149,10 @@ def live_trading():
                     type=ORDER_TYPE_MARKET,
                     quantity=TRADE_QUANTITY
                 )
-                print("Buy order executed:", order)
+                if order['status'] == 'FILLED':
+                    print("Buy order executed successfully:", order)
+                else:
+                    print("Buy order not filled:", order)
 
             elif latest_signal == -1:
                 print(f"\n{datetime.datetime.now()} - SELL SIGNAL")
@@ -161,17 +163,16 @@ def live_trading():
                     type=ORDER_TYPE_MARKET,
                     quantity=TRADE_QUANTITY
                 )
-                print("Sell order executed:", order)
-
+                if order['status'] == 'FILLED':
+                    print("Sell order executed successfully:", order)
+                else:
+                    print("Sell order not filled:", order)
             else:
-                print(f"{datetime.datetime.now()} - No signal")
-
-            # Wait for next candle
-            time.sleep(60 * 60)  # Wait 1 hour for next check
+                print(f"\n{datetime.datetime.now()} - NO SIGNAL")
 
         except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(60)
+            print("An error occurred:", e)
+        time.sleep(60*15)  # Wait for 15 minute before checking again
 
 def test_run():
     """Test the SMA strategy on historical data"""
