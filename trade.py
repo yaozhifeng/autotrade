@@ -128,7 +128,7 @@ def backtest_strategy(df, initial_balance=INITIAL_BALANCE):
 def buy():
     """Place a market buy order"""
     balance = client.get_asset_balance(asset='USDT')
-    if balance and float(balance['free']) >= TRADE_QUANTITY * client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price']:
+    if balance and float(balance['free']) >= TRADE_QUANTITY * float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price']):
         order = client.create_order(
             symbol=TRADE_SYMBOL,
             side=SIDE_BUY,
