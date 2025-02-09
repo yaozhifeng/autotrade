@@ -18,7 +18,7 @@ TRADE_QUANTITY = 1  # Amount of coins to trade
 SHORT_SMA = 20
 LONG_SMA = 50
 INTERVAL = Client.KLINE_INTERVAL_15MINUTE  # 15 min candles
-LOOKBACK = 4*24*4  # Amount of historical data to fetch
+LOOKBACK = 4*24*5  # Amount of historical data to fetch
 TRADING_FEE = 0.001  # 0.1% trading fee
 
 # Binance API Configuration
@@ -107,29 +107,63 @@ def backtest_strategy(df, initial_balance=INITIAL_BALANCE):
             })
 
     # Calculate final portfolio value
-    final_value = balance + holdings * df.iloc[-1]['close']
-    return final_value, trades, holdings, balance
-
-def print_backtest_results(initial, final, trades, holdings, balance):
-    """Display backtesting results"""
+    final = balance + holdings * df.iloc[-1]['close']
+    
+    ## Display backtesting results
     print(f"\n{' Backtest Results ':-^40}")
-    print(f"Initial Balance: ${initial:.2f}")
+    print(f"Initial Balance: ${initial_balance:.2f}")
     print(f"Final Value:   ${final:.2f}")
-    print(f"Return:          {(final/initial-1)*100:.2f}%")
+    print(f"Return:          {(final/initial_balance-1)*100:.2f}%")
     print(f"Total Trades:    {len(trades)} trades")
     print(f"Holdings:        {holdings} coins")
     print(f"Final Balance:   ${balance:.2f}")
+    # Print the latest coin price
+    latest_price = df.iloc[-1]['close']
+    print(f"Latest {TRADE_SYMBOL} price: ${latest_price:.2f}")
 
     print("\nAll trades:")
     for trade in trades:
         print(f"{trade['timestamp']} {trade['type'].upper()} at ${trade['price']:.5f} - Portfolio Value: ${trade['value']:.2f}")
-    # print("\nLast 5 trades:")
-    # for trade in trades[-5:]:
-    #     print(f"{trade['timestamp']} {trade['type'].upper()} at ${trade['price']:.5f}")
+
+def buy():
+    """Place a market buy order"""
+    balance = client.get_asset_balance(asset='USDT')
+    if balance and float(balance['free']) >= TRADE_QUANTITY * client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price']:
+        order = client.create_order(
+            symbol=TRADE_SYMBOL,
+            side=SIDE_BUY,
+            type=ORDER_TYPE_MARKET,
+            quantity=TRADE_QUANTITY
+        )
+        if order['status'] == 'FILLED':
+            print("Buy order executed successfully:", order)
+        else:
+            print("Buy order not filled:", order)
+    else:
+        print("Insufficient USDT balance to place buy order")
+
+def sell():
+    """Place a market sell order"""
+    balance = client.get_asset_balance(asset=TRADE_SYMBOL.replace('USDT', ''))
+    if balance and float(balance['free']) >= TRADE_QUANTITY:
+        order = client.create_order(
+            symbol=TRADE_SYMBOL,
+            side=SIDE_SELL,
+            type=ORDER_TYPE_MARKET,
+            quantity=TRADE_QUANTITY
+        )
+        if order['status'] == 'FILLED':
+            print("Sell order executed successfully:", order)
+        else:
+            print("Sell order not filled:", order)
+    else:
+        print(f"Insufficient {TRADE_SYMBOL.replace('USDT', '')} balance to place sell order")
 
 def live_trading():
     """Execute live trading based on SMA strategy"""
     print("\nStarting live trading...")
+    in_position = False  # Track if we are currently holding a position
+
     while True:
         try:
             # Fetch historical data
@@ -140,47 +174,30 @@ def live_trading():
             # Get latest signal
             latest_signal = df.iloc[-1]['signal']
 
-            if latest_signal == 1:
+            if latest_signal == 1 and not in_position:
                 print(f"\n{datetime.datetime.now()} - BUY SIGNAL")
                 # Place buy order
-                order = client.create_order(
-                    symbol=TRADE_SYMBOL,
-                    side=SIDE_BUY,
-                    type=ORDER_TYPE_MARKET,
-                    quantity=TRADE_QUANTITY
-                )
-                if order['status'] == 'FILLED':
-                    print("Buy order executed successfully:", order)
-                else:
-                    print("Buy order not filled:", order)
+                buy()
+                in_position = True  # Update position status
 
-            elif latest_signal == -1:
+            elif latest_signal == -1 and in_position:
                 print(f"\n{datetime.datetime.now()} - SELL SIGNAL")
                 # Place sell order
-                order = client.create_order(
-                    symbol=TRADE_SYMBOL,
-                    side=SIDE_SELL,
-                    type=ORDER_TYPE_MARKET,
-                    quantity=TRADE_QUANTITY
-                )
-                if order['status'] == 'FILLED':
-                    print("Sell order executed successfully:", order)
-                else:
-                    print("Sell order not filled:", order)
+                sell()
+                in_position = False  # Update position status
             else:
-                print(f"\n{datetime.datetime.now()} - NO SIGNAL")
+                print(f"\n{datetime.datetime.now()} - NO SIGNAL or already in position")
 
         except Exception as e:
             print("An error occurred:", e)
-        time.sleep(60*15)  # Wait for 15 minute before checking again
+        time.sleep(60*15)  # Wait for 15 minutes before checking again
 
 def test_run():
     """Test the SMA strategy on historical data"""
     data = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LOOKBACK)
     data = calculate_sma(data, SHORT_SMA, LONG_SMA)
     data = generate_signals(data)
-    final_value, trades, holding, balance = backtest_strategy(data, INITIAL_BALANCE)
-    print_backtest_results(INITIAL_BALANCE, final_value, trades, holding, balance)
+    backtest_strategy(data, INITIAL_BALANCE)
 
 if __name__ == "__main__":
     if TEST_MODE:
