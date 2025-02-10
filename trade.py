@@ -1,6 +1,7 @@
 from binance.client import Client
 from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_MARKET
 import pandas as pd
+import yfinance as yf
 #import numpy as np
 import time
 import datetime
@@ -33,19 +34,54 @@ else:
 # Initialize Binance Client
 client = Client(API_KEY, API_SECRET, testnet=TEST_MODE)
 
+# def fetch_historical_data(symbol, interval, lookback):
+#     """Fetch historical klines data from Binance"""
+#     klines = client.get_klines(
+#         symbol=symbol,
+#         interval=interval,
+#         limit=lookback
+#     )
+#     df = pd.DataFrame(klines, columns=[
+#         'timestamp', 'open', 'high', 'low', 'close', 'volume',
+#         'close_time', 'quote_asset_volume', 'number_of_trades',
+#         'taker_buy_base', 'taker_buy_quote', 'ignore'
+#     ])
+#     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+#     df['close'] = df['close'].astype(float)
+#     return df[['timestamp', 'close']]
+
+def convert_symbol_to_yahoo(symbol):
+    """Convert Binance symbol format to Yahoo Finance symbol format"""
+    return symbol.replace('USDT', '-USD')
+
 def fetch_historical_data(symbol, interval, lookback):
-    """Fetch historical klines data from Binance"""
-    klines = client.get_klines(
-        symbol=symbol,
-        interval=interval,
-        limit=lookback
-    )
-    df = pd.DataFrame(klines, columns=[
-        'timestamp', 'open', 'high', 'low', 'close', 'volume',
-        'close_time', 'quote_asset_volume', 'number_of_trades',
-        'taker_buy_base', 'taker_buy_quote', 'ignore'
-    ])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    """Fetch historical klines data from Yahoo Finance"""
+    # Convert Binance interval to yfinance interval
+    interval_map = {
+        Client.KLINE_INTERVAL_1MINUTE: '1m',
+        Client.KLINE_INTERVAL_3MINUTE: '3m',
+        Client.KLINE_INTERVAL_5MINUTE: '5m',
+        Client.KLINE_INTERVAL_15MINUTE: '15m',
+        Client.KLINE_INTERVAL_30MINUTE: '30m',
+        Client.KLINE_INTERVAL_1HOUR: '1h',
+        Client.KLINE_INTERVAL_2HOUR: '2h',
+        Client.KLINE_INTERVAL_4HOUR: '4h',
+        Client.KLINE_INTERVAL_6HOUR: '6h',
+        Client.KLINE_INTERVAL_8HOUR: '8h',
+        Client.KLINE_INTERVAL_12HOUR: '12h',
+        Client.KLINE_INTERVAL_1DAY: '1d',
+        Client.KLINE_INTERVAL_3DAY: '3d',
+        Client.KLINE_INTERVAL_1WEEK: '1wk',
+        Client.KLINE_INTERVAL_1MONTH: '1mo'
+    }
+    yf_interval = interval_map.get(interval, '1d')
+    symbol = convert_symbol_to_yahoo(symbol)
+
+    # Fetch data from Yahoo Finance
+    df = yf.download(symbol, period=f'{lookback}d', interval=yf_interval)
+    df.columns = df.columns.droplevel(1)
+    df.reset_index(inplace=True)
+    df.rename(columns={'Datetime': 'timestamp', 'Close': 'close'}, inplace=True)
     df['close'] = df['close'].astype(float)
     return df[['timestamp', 'close']]
 
@@ -70,8 +106,7 @@ def generate_signals(df):
 
     return df
 
-def backtest_strategy(df, initial_balance=INITIAL_BALANCE):
-    """Backtest the SMA crossover strategy"""
+def backtest_strategy(df, initial_balance):
     balance = initial_balance
     holdings = 0
     in_position = False
@@ -106,9 +141,12 @@ def backtest_strategy(df, initial_balance=INITIAL_BALANCE):
                 'value': balance + holdings * price
             })
 
-    # Calculate final portfolio value
-    final = balance + holdings * df.iloc[-1]['close']
-    
+    # Check if DataFrame is not empty before accessing the last element
+    if not df.empty:
+        final = balance + holdings * df.iloc[-1]['close']
+    else:
+        final = balance
+
     ## Display backtesting results
     print(f"\n{' Backtest Results ':-^40}")
     print(f"Initial Balance: ${initial_balance:.2f}")
@@ -117,12 +155,12 @@ def backtest_strategy(df, initial_balance=INITIAL_BALANCE):
     print(f"Total Trades:    {len(trades)} trades")
     print(f"Holdings:        {holdings} coins")
     print(f"Final Balance:   ${balance:.2f}")
-    # Print the latest coin price
-    latest_price = df.iloc[-1]['close']
-    print(f"Latest {TRADE_SYMBOL} price: ${latest_price:.2f}")
+    if not df.empty:
+        latest_price = df.iloc[-1]['close']
+        print(f"Latest {TRADE_SYMBOL} price: ${latest_price:.2f}")
 
-    print("\nAll trades:")
-    for trade in trades:
+    print("\nLast 10 trades:")
+    for trade in trades[-10:]:
         print(f"{trade['timestamp']} {trade['type'].upper()} at ${trade['price']:.5f} - Portfolio Value: ${trade['value']:.2f}")
 
 def buy():
