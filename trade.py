@@ -9,18 +9,21 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 # Configuration
-TEST_MODE = os.getenv('TEST_MODE', 'True')
+TEST_MODE = os.getenv('TEST_MODE', 'True') == 'True'
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', 1000))
 TRADE_SYMBOL = os.getenv('TRADE_SYMBOL', 'BNBUSDT')
 TRADE_QUANTITY = float(os.getenv('TRADE_QUANTITY', 1))
 SHORT_SMA = int(os.getenv('SHORT_SMA', 20))
 LONG_SMA = int(os.getenv('LONG_SMA', 50))
-INTERVAL = os.getenv('INTERVAL', Client.KLINE_INTERVAL_15MINUTE)
+INTERVAL = os.getenv('INTERVAL', '15m')
 LOOKBACK = int(os.getenv('LOOKBACK', 4*24*5))
 TRADING_FEE = float(os.getenv('TRADING_FEE', 0.001))
+MANAGE_RISK = os.getenv('MANAGE_RISK', 'False') == 'True'
+TAKE_PROFIT = float(os.getenv('TAKE_PROFIT', 0.1))  # 10% profit
+STOP_LOSS = float(os.getenv('STOP_LOSS', 0.05))  # 5% loss
 
 # Binance API Configuration
 API_KEY = os.getenv('API_KEY')
@@ -31,24 +34,27 @@ if TEST_MODE:
 else:
     BASE_URL = 'https://api.binance.com'
 
+# Binance interval to yfinance interval
+
+# Client.KLINE_INTERVAL_1MINUTE: '1m',
+# Client.KLINE_INTERVAL_3MINUTE: '3m',
+# Client.KLINE_INTERVAL_5MINUTE: '5m',
+# Client.KLINE_INTERVAL_15MINUTE: '15m',
+# Client.KLINE_INTERVAL_30MINUTE: '30m',
+# Client.KLINE_INTERVAL_1HOUR: '1h',
+# Client.KLINE_INTERVAL_2HOUR: '2h',
+# Client.KLINE_INTERVAL_4HOUR: '4h',
+# Client.KLINE_INTERVAL_6HOUR: '6h',
+# Client.KLINE_INTERVAL_8HOUR: '8h',
+# Client.KLINE_INTERVAL_12HOUR: '12h',
+# Client.KLINE_INTERVAL_1DAY: '1d',
+# Client.KLINE_INTERVAL_3DAY: '3d',
+# Client.KLINE_INTERVAL_1WEEK: '1wk',
+# Client.KLINE_INTERVAL_1MONTH: '1mo'
+
+
 # Initialize Binance Client
 client = Client(API_KEY, API_SECRET, testnet=TEST_MODE)
-
-# def fetch_historical_data(symbol, interval, lookback):
-#     """Fetch historical klines data from Binance"""
-#     klines = client.get_klines(
-#         symbol=symbol,
-#         interval=interval,
-#         limit=lookback
-#     )
-#     df = pd.DataFrame(klines, columns=[
-#         'timestamp', 'open', 'high', 'low', 'close', 'volume',
-#         'close_time', 'quote_asset_volume', 'number_of_trades',
-#         'taker_buy_base', 'taker_buy_quote', 'ignore'
-#     ])
-#     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-#     df['close'] = df['close'].astype(float)
-#     return df[['timestamp', 'close']]
 
 def convert_symbol_to_yahoo(symbol):
     """Convert Binance symbol format to Yahoo Finance symbol format"""
@@ -56,29 +62,10 @@ def convert_symbol_to_yahoo(symbol):
 
 def fetch_historical_data(symbol, interval, lookback):
     """Fetch historical klines data from Yahoo Finance"""
-    # Convert Binance interval to yfinance interval
-    interval_map = {
-        Client.KLINE_INTERVAL_1MINUTE: '1m',
-        Client.KLINE_INTERVAL_3MINUTE: '3m',
-        Client.KLINE_INTERVAL_5MINUTE: '5m',
-        Client.KLINE_INTERVAL_15MINUTE: '15m',
-        Client.KLINE_INTERVAL_30MINUTE: '30m',
-        Client.KLINE_INTERVAL_1HOUR: '1h',
-        Client.KLINE_INTERVAL_2HOUR: '2h',
-        Client.KLINE_INTERVAL_4HOUR: '4h',
-        Client.KLINE_INTERVAL_6HOUR: '6h',
-        Client.KLINE_INTERVAL_8HOUR: '8h',
-        Client.KLINE_INTERVAL_12HOUR: '12h',
-        Client.KLINE_INTERVAL_1DAY: '1d',
-        Client.KLINE_INTERVAL_3DAY: '3d',
-        Client.KLINE_INTERVAL_1WEEK: '1wk',
-        Client.KLINE_INTERVAL_1MONTH: '1mo'
-    }
-    yf_interval = interval_map.get(interval, '1d')
     symbol = convert_symbol_to_yahoo(symbol)
 
     # Fetch data from Yahoo Finance
-    df = yf.download(symbol, period=f'{lookback}d', interval=yf_interval)
+    df = yf.download(symbol, period=f'{lookback}d', interval=interval)
     df.columns = df.columns.droplevel(1)
     df.reset_index(inplace=True)
     df.rename(columns={'Datetime': 'timestamp', 'Close': 'close'}, inplace=True)
@@ -92,37 +79,86 @@ def calculate_sma(df, short_period, long_period):
     df.dropna(inplace=True)
     return df
 
+def calculate_ema(df, short_period, long_period):
+    """Calculate EMA indicators"""
+    df['short_ema'] = df['close'].ewm(span=short_period, adjust=False).mean()
+    df['long_ema'] = df['close'].ewm(span=long_period, adjust=False).mean()
+    df.dropna(inplace=True)
+    return df
+
 def generate_signals(df):
     """Generate trading signals based on SMA crossover"""
     df['signal'] = 0
-    df['short_prev'] = df['short_sma'].shift(1)
-    df['long_prev'] = df['long_sma'].shift(1)
+    df['short_prev'] = df['short_ema'].shift(1)
+    df['long_prev'] = df['long_ema'].shift(1)
 
-    # Buy signal (short SMA crosses above long SMA)
-    df.loc[(df['short_sma'] > df['long_sma']) & (df['short_prev'] <= df['long_prev']), 'signal'] = 1
+    # # Buy signal (short SMA crosses above long SMA)
+    # df.loc[(df['short_sma'] > df['long_sma']) & (df['short_prev'] <= df['long_prev']), 'signal'] = 1
+    # # Sell signal (short SMA crosses below long SMA)
+    # df.loc[(df['short_sma'] < df['long_sma']) & (df['short_prev'] >= df['long_prev']), 'signal'] = -1
 
-    # Sell signal (short SMA crosses below long SMA)
-    df.loc[(df['short_sma'] < df['long_sma']) & (df['short_prev'] >= df['long_prev']), 'signal'] = -1
+    # Buy signal (short EMA crosses above long EMA)
+    df.loc[(df['short_ema'] > df['long_ema']) & (df['short_prev'] <= df['long_prev']), 'signal'] = 1
+
+    # Sell signal (short EMA crosses below long EMA)
+    df.loc[(df['short_ema'] < df['long_ema']) & (df['short_prev'] >= df['long_prev']), 'signal'] = -1
 
     return df
 
-def backtest_strategy(df, initial_balance):
+def backtest_strategy(df, initial_balance, take_profit=0.1, stop_loss=0.05):
     balance = initial_balance
     holdings = 0
     in_position = False
     trades = []
+    buy_price = None
 
     for index, row in df.iterrows():
         price = row['close']
 
-        ready_to_buy = balance >= TRADE_QUANTITY * price * (1 + TRADING_FEE)
-        ready_to_sell = holdings >= TRADE_QUANTITY
+        quantity = int(balance * 0.9 / price)
+
+        ready_to_buy = balance >= quantity * price * (1 + TRADING_FEE)
+        ready_to_sell = holdings >= quantity
+
+        if in_position:
+            # Calculate the current profit/loss percentage
+            profit_loss = (price - buy_price) / buy_price
+
+            if MANAGE_RISK:
+                # Check for take profit
+                if profit_loss >= take_profit:
+                    balance += holdings * price * (1 - TRADING_FEE)
+                    holdings = 0
+                    in_position = False
+                    trades.append({
+                        'timestamp': row['timestamp'],
+                        'type': 'sell',
+                        'price': price,
+                        'value': balance
+                    })
+                    print(f"Take profit triggered at {price:.2f}, profit: {profit_loss:.2%}")
+                    buy_price = None
+
+                # Check for stop loss
+                elif profit_loss <= -stop_loss:
+                    balance += holdings * price * (1 - TRADING_FEE)
+                    holdings = 0
+                    in_position = False
+                    trades.append({
+                        'timestamp': row['timestamp'],
+                        'type': 'sell',
+                        'price': price,
+                        'value': balance
+                    })
+                    print(f"Stop loss triggered at {price:.2f}, loss: {profit_loss:.2%}")
+                    buy_price = None
 
         if row['signal'] == 1 and ready_to_buy and not in_position:
             # Buy
-            holdings += TRADE_QUANTITY
-            balance -= TRADE_QUANTITY * price * (1 + TRADING_FEE)
+            holdings += quantity
+            balance -= quantity * price * (1 + TRADING_FEE)
             in_position = True
+            buy_price = price
             trades.append({
                 'timestamp': row['timestamp'],
                 'type': 'buy',
@@ -131,14 +167,14 @@ def backtest_strategy(df, initial_balance):
             })
         elif row['signal'] == -1 and ready_to_sell and in_position:
             # Sell
-            balance += TRADE_QUANTITY * price * (1 - TRADING_FEE)
-            holdings -= TRADE_QUANTITY
+            balance += holdings * price * (1 - TRADING_FEE)
+            holdings =0
             in_position = False
             trades.append({
                 'timestamp': row['timestamp'],
                 'type': 'sell',
                 'price': price,
-                'value': balance + holdings * price
+                'value': balance
             })
 
     # Check if DataFrame is not empty before accessing the last element
@@ -159,8 +195,12 @@ def backtest_strategy(df, initial_balance):
         latest_price = df.iloc[-1]['close']
         print(f"Latest {TRADE_SYMBOL} price: ${latest_price:.2f}")
 
-    print("\nLast 10 trades:")
-    for trade in trades[-10:]:
+    print("\nFirst 4 trades:")
+    for trade in trades[:4]:
+        print(f"{trade['timestamp']} {trade['type'].upper()} at ${trade['price']:.5f} - Portfolio Value: ${trade['value']:.2f}")
+
+    print("\nLast 6 trades:")
+    for trade in trades[-6:]:
         print(f"{trade['timestamp']} {trade['type'].upper()} at ${trade['price']:.5f} - Portfolio Value: ${trade['value']:.2f}")
 
 def buy():
@@ -223,39 +263,68 @@ def live_trading():
     """Execute live trading based on SMA strategy"""
     print("\nStarting live trading...")
     in_position = False  # Track if we are currently holding a position
+    entry_price = 0.0  # Track the entry price of the current position
 
     while True:
         try:
             # Fetch historical data
             df = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LONG_SMA*2)
-            df = calculate_sma(df, SHORT_SMA, LONG_SMA)
+            df = calculate_ema(df, SHORT_SMA, LONG_SMA)
             df = generate_signals(df)
 
             # Get latest signal
             latest_signal = df.iloc[-1]['signal']
+            current_price = df.iloc[-1]['close']
+
+            if in_position:
+                # Calculate the current profit/loss percentage
+                profit_loss = (current_price - entry_price) / entry_price
+
+                # Check for take profit
+                if profit_loss >= TAKE_PROFIT:
+                    print(f"\n{datetime.datetime.now()} - TAKE PROFIT SIGNAL")
+                    # Place sell order
+                    sell()
+                    in_position = False  # Update position status
+                    entry_price = None
+                    print(f"Take profit triggered at {current_price:.2f}, profit: {profit_loss:.2%}")
+
+                # Check for stop loss
+                elif profit_loss <= -STOP_LOSS:
+                    print(f"\n{datetime.datetime.now()} - STOP LOSS SIGNAL")
+                    # Place sell order
+                    sell()
+                    in_position = False  # Update position status
+                    entry_price = None
+                    print(f"Stop loss triggered at {current_price:.2f}, loss: {profit_loss:.2%}")
 
             if latest_signal == 1 and not in_position:
                 print(f"\n{datetime.datetime.now()} - BUY SIGNAL")
                 # Place buy order
                 buy()
                 in_position = True  # Update position status
+                entry_price = current_price
+                print(f"Buy order executed at {entry_price:.2f}")
 
             elif latest_signal == -1 and in_position:
                 print(f"\n{datetime.datetime.now()} - SELL SIGNAL")
                 # Place sell order
                 sell()
                 in_position = False  # Update position status
+                entry_price = None
+                print(f"Sell order executed at {current_price:.2f}")
+
             else:
                 print(f"\n{datetime.datetime.now()} - NO SIGNAL or already in position")
 
         except Exception as e:
             print("An error occurred:", e)
-        time.sleep(60*15)  # Wait for 15 minutes before checking again
+        time.sleep(60*30)  # Wait for 30 minutes before checking again
 
 def test_run():
     """Test the SMA strategy on historical data"""
     data = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LOOKBACK)
-    data = calculate_sma(data, SHORT_SMA, LONG_SMA)
+    data = calculate_ema(data, SHORT_SMA, LONG_SMA)
     data = generate_signals(data)
     backtest_strategy(data, INITIAL_BALANCE)
 
