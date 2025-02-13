@@ -61,6 +61,15 @@ def convert_symbol_to_yahoo(symbol):
     return symbol.replace('USDT', '-USD')
 
 def fetch_historical_data(symbol, interval, lookback):
+    """Fetch historical klines data from Binance"""
+    klines = client.get_historical_klines(symbol, interval, f"{lookback} days ago UTC")
+    df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.reset_index(inplace=True)
+    df['close'] = df['close'].astype(float)
+    return df[['timestamp', 'close']]
+
+def fetch_historical_data_from_yahoo(symbol, interval, lookback):
     """Fetch historical klines data from Yahoo Finance"""
     symbol = convert_symbol_to_yahoo(symbol)
 
@@ -105,7 +114,7 @@ def generate_signals(df):
 
     return df
 
-def backtest_strategy(df, initial_balance, take_profit=0.1, stop_loss=0.05):
+def backtest_strategy(df, initial_balance, take_profit=TAKE_PROFIT, stop_loss=STOP_LOSS):
     balance = initial_balance
     holdings = 0
     in_position = False
@@ -203,10 +212,10 @@ def backtest_strategy(df, initial_balance, take_profit=0.1, stop_loss=0.05):
     for trade in trades[-6:]:
         print(f"{trade['timestamp']} {trade['type'].upper()} at ${trade['price']:.5f} - Portfolio Value: ${trade['value']:.2f}")
 
-def buy():
+def buy(quantity=TRADE_QUANTITY):
     """Place a market buy order"""
     balance = client.get_asset_balance(asset='USDT')
-    if balance and float(balance['free']) >= TRADE_QUANTITY * float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price']):
+    if balance and float(balance['free']) >= quantity * float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price']):
         order = client.create_order(
             symbol=TRADE_SYMBOL,
             side=SIDE_BUY,
@@ -220,10 +229,10 @@ def buy():
     else:
         print("Insufficient USDT balance to place buy order")
 
-def sell():
+def sell(quantity=TRADE_QUANTITY):
     """Place a market sell order"""
     balance = client.get_asset_balance(asset=TRADE_SYMBOL.replace('USDT', ''))
-    if balance and float(balance['free']) >= TRADE_QUANTITY:
+    if balance and float(balance['free']) >= quantity:
         order = client.create_order(
             symbol=TRADE_SYMBOL,
             side=SIDE_SELL,
