@@ -316,24 +316,29 @@ def live_trading():
                     entry_price = None
                     print(f"Stop loss triggered at {current_price:.2f}, loss: {profit_loss:.2%}")
 
-            if latest_signal == 1 and not in_position:
+            if latest_signal == 1:
                 print(f"\n{datetime.datetime.now()} - BUY SIGNAL")
-                # Place buy order
-                buy()
-                in_position = True  # Update position status
-                entry_price = current_price
-                print(f"Buy order executed at {entry_price:.2f}")
+                if not in_position:
+                    # Place buy order
+                    buy()
+                    in_position = True  # Update position status
+                    entry_price = current_price
+                    print(f"Buy order executed at {entry_price:.2f}")
+                else:
+                    print(f"Already in position, skip buy order")
 
-            elif latest_signal == -1 and in_position:
+            elif latest_signal == -1:
                 print(f"\n{datetime.datetime.now()} - SELL SIGNAL")
-                # Place sell order
-                sell()
-                in_position = False  # Update position status
-                entry_price = None
-                print(f"Sell order executed at {current_price:.2f}")
-
+                if in_position:
+                    # Place sell order
+                    sell()
+                    in_position = False  # Update position status
+                    entry_price = None
+                    print(f"Sell order executed at {current_price:.2f}")
+                else:
+                    print(f"Not in position, skip sell order")
             else:
-                print(f"\n{datetime.datetime.now()} - NO SIGNAL or already in position")
+                print(f"\n{datetime.datetime.now()} - NO SIGNAL - Current Price: {current_price:.2f}")
 
         except Exception as e:
             print("An error occurred:", e)
