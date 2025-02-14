@@ -65,6 +65,7 @@ def fetch_historical_data(symbol, interval, lookback):
     klines = client.get_historical_klines(symbol, interval, f"{lookback} days ago UTC")
     df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df['timestamp'] = df['timestamp'].dt.tz_localize('UTC').dt.tz_convert('Asia/Shanghai')
     df.reset_index(inplace=True)
     df['close'] = df['close'].astype(float)
     return df[['timestamp', 'close']]
@@ -216,12 +217,16 @@ def buy(quantity=TRADE_QUANTITY):
     """Place a market buy order"""
     balance = client.get_asset_balance(asset='USDT')
     if balance and float(balance['free']) >= quantity * float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price']):
-        order = client.create_order(
+        try:
+            order = client.create_order(
             symbol=TRADE_SYMBOL,
             side=SIDE_BUY,
             type=ORDER_TYPE_MARKET,
             quantity=TRADE_QUANTITY
-        )
+            )
+        except Exception as e:
+            print(f"An error occurred while placing buy order: {e}")
+            return
         if order['status'] == 'FILLED':
             print("Buy order executed successfully:", order)
         else:
@@ -233,12 +238,16 @@ def sell(quantity=TRADE_QUANTITY):
     """Place a market sell order"""
     balance = client.get_asset_balance(asset=TRADE_SYMBOL.replace('USDT', ''))
     if balance and float(balance['free']) >= quantity:
-        order = client.create_order(
+        try:
+            order = client.create_order(
             symbol=TRADE_SYMBOL,
             side=SIDE_SELL,
             type=ORDER_TYPE_MARKET,
             quantity=TRADE_QUANTITY
-        )
+            )
+        except Exception as e:
+            print(f"An error occurred while placing sell order: {e}")
+            return
         if order['status'] == 'FILLED':
             print("Sell order executed successfully:", order)
         else:
