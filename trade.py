@@ -292,8 +292,12 @@ def live_trading():
             df = generate_signals(df)
 
             # Get latest signal
-            latest_signal = df.iloc[-1]['signal']
-            current_price = df.iloc[-1]['close']
+            latest_row = df.iloc[-1]
+            latest_signal = latest_row['signal']
+            latest_price = latest_row['close']
+            latest_timestamp = latest_row['timestamp']
+            current_price = float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price'])
+            current_time = datetime.datetime.now(datetime.timezone.utc).astimezone(datetime.timezone(datetime.timedelta(hours=8)))
 
             if in_position:
                 # Calculate the current profit/loss percentage
@@ -301,7 +305,7 @@ def live_trading():
 
                 # Check for take profit
                 if profit_loss >= TAKE_PROFIT:
-                    print(f"\n{datetime.datetime.now()} - TAKE PROFIT SIGNAL")
+                    print(f"\n{current_time} - TAKE PROFIT SIGNAL")
                     # Place sell order
                     sell()
                     in_position = False  # Update position status
@@ -310,7 +314,7 @@ def live_trading():
 
                 # Check for stop loss
                 elif profit_loss <= -STOP_LOSS:
-                    print(f"\n{datetime.datetime.now()} - STOP LOSS SIGNAL")
+                    print(f"\n{current_time} - STOP LOSS SIGNAL")
                     # Place sell order
                     sell()
                     in_position = False  # Update position status
@@ -318,28 +322,28 @@ def live_trading():
                     print(f"Stop loss triggered at {current_price:.2f}, loss: {profit_loss:.2%}")
 
             if latest_signal == 1:
-                print(f"\n{datetime.datetime.now()} - BUY SIGNAL")
+                print(f"\n{latest_timestamp} - BUY SIGNAL")
                 if not in_position:
                     # Place buy order
                     buy()
                     in_position = True  # Update position status
                     entry_price = current_price
-                    print(f"Buy order executed at {entry_price:.2f}")
+                    print(f"Buy order executed at {entry_price:.2f} at {current_time}")
                 else:
                     print(f"Already in position, skip buy order")
 
             elif latest_signal == -1:
-                print(f"\n{datetime.datetime.now()} - SELL SIGNAL")
+                print(f"\n{latest_timestamp} - SELL SIGNAL")
                 if in_position:
                     # Place sell order
                     sell()
                     in_position = False  # Update position status
                     entry_price = None
-                    print(f"Sell order executed at {current_price:.2f}")
+                    print(f"Sell order executed at {current_price:.2f} at {current_time}")
                 else:
                     print(f"Not in position, skip sell order")
             else:
-                print(f"\n{datetime.datetime.now()} - NO SIGNAL - Current Price: {current_price:.2f}")
+                print(f"\n{latest_timestamp} - NO SIGNAL - Current Price: {current_price:.2f}")
 
         except Exception as e:
             print("An error occurred:", e)
