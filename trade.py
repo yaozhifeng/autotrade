@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # Configuration
+TEST_NET = os.getenv('TEST_NET', 'True') == 'True'
 TEST_MODE = os.getenv('TEST_MODE', 'True') == 'True'
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', 1000))
 TRADE_SYMBOL = os.getenv('TRADE_SYMBOL', 'BNBUSDT')
@@ -29,10 +30,10 @@ STOP_LOSS = float(os.getenv('STOP_LOSS', 0.05))  # 5% loss
 API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
 
-if TEST_MODE:
-    BASE_URL = 'https://testnet.binance.vision'
-else:
-    BASE_URL = 'https://api.binance.com'
+# if TEST_MODE:
+#     BASE_URL = 'https://testnet.binance.vision'
+# else:
+#     BASE_URL = 'https://api.binance.com'
 
 # Binance interval to yfinance interval
 
@@ -54,7 +55,7 @@ else:
 
 
 # Initialize Binance Client
-client = Client(API_KEY, API_SECRET, testnet=TEST_MODE)
+client = Client(API_KEY, API_SECRET, testnet=TEST_NET)
 
 def convert_symbol_to_yahoo(symbol):
     """Convert Binance symbol format to Yahoo Finance symbol format"""
