@@ -19,7 +19,7 @@ TRADE_QUANTITY = float(os.getenv('TRADE_QUANTITY', 1))
 SHORT_SMA = int(os.getenv('SHORT_SMA', 20))
 LONG_SMA = int(os.getenv('LONG_SMA', 50))
 INTERVAL = os.getenv('INTERVAL', '15m')
-LOOKBACK = int(os.getenv('LOOKBACK', 4*24*5))
+LOOKBACK = int(os.getenv('LOOKBACK', 5))
 TRADING_FEE = float(os.getenv('TRADING_FEE', 0.001))
 MANAGE_RISK = os.getenv('MANAGE_RISK', 'False') == 'True'
 TAKE_PROFIT = float(os.getenv('TAKE_PROFIT', 0.1))  # 10% profit
@@ -60,9 +60,9 @@ def convert_symbol_to_yahoo(symbol):
     """Convert Binance symbol format to Yahoo Finance symbol format"""
     return symbol.replace('USDT', '-USD')
 
-def fetch_historical_data(symbol, interval, lookback):
+def fetch_historical_data(symbol, interval, limit=500):
     """Fetch historical klines data from Binance"""
-    klines = client.get_historical_klines(symbol, interval, f"{lookback} days ago UTC")
+    klines = client.get_historical_klines(symbol, interval, limit=limit)
     df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df['timestamp'] = df['timestamp'].dt.tz_localize('UTC').dt.tz_convert('Asia/Shanghai')
@@ -222,7 +222,7 @@ def buy(quantity=TRADE_QUANTITY):
             symbol=TRADE_SYMBOL,
             side=SIDE_BUY,
             type=ORDER_TYPE_MARKET,
-            quantity=TRADE_QUANTITY
+            quantity=quantity
             )
         except Exception as e:
             print(f"An error occurred while placing buy order: {e}")
@@ -243,7 +243,7 @@ def sell(quantity=TRADE_QUANTITY):
             symbol=TRADE_SYMBOL,
             side=SIDE_SELL,
             type=ORDER_TYPE_MARKET,
-            quantity=TRADE_QUANTITY
+            quantity=quantity
             )
         except Exception as e:
             print(f"An error occurred while placing sell order: {e}")
@@ -346,7 +346,7 @@ def live_trading():
 
 def test_run():
     """Test the SMA strategy on historical data"""
-    data = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LOOKBACK)
+    data = fetch_historical_data(TRADE_SYMBOL, INTERVAL)
     data = calculate_ema(data, SHORT_SMA, LONG_SMA)
     data = generate_signals(data)
     backtest_strategy(data, INITIAL_BALANCE)
