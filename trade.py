@@ -2,6 +2,7 @@ from binance.client import Client
 from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_MARKET
 import pandas as pd
 import yfinance as yf
+import requests
 #import numpy as np
 import time
 import datetime
@@ -229,7 +230,9 @@ def buy(quantity=TRADE_QUANTITY):
             print(f"An error occurred while placing buy order: {e}")
             return
         if order['status'] == 'FILLED':
-            print("Buy order executed successfully:", order)
+            msg = f"Buy order executed: {order['fills'][0]['qty']} {TRADE_SYMBOL} at ${order['fills'][0]['price']}"
+            send_telegram_message(msg)
+            print(msg)
         else:
             print("Buy order not filled:", order)
     else:
@@ -250,7 +253,9 @@ def sell(quantity=TRADE_QUANTITY):
             print(f"An error occurred while placing sell order: {e}")
             return
         if order['status'] == 'FILLED':
-            print("Sell order executed successfully:", order)
+            msg = f"Sell order executed: {order['fills'][0]['qty']} {TRADE_SYMBOL} at ${order['fills'][0]['price']}"
+            send_telegram_message(msg)
+            print(msg)
         else:
             print("Sell order not filled:", order)
     else:
@@ -277,6 +282,18 @@ def check_portfolio_value():
         print(f"Portfolio Value: ${total_value:.2f} (USDT: ${usdt_value:.2f}, {target_coin}: {coin_value:.6f} @ ${coin_price:.2f})")
     except Exception as e:
         print("An error occurred while checking portfolio value:", e)
+
+def send_telegram_message(msg):
+    """Send a message to a Telegram channel"""
+    try:
+        chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
+        url = f"https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}"
+        response = requests.get(url)
+        print("Telegram message sent successfully")
+    except Exception as e:
+        print("An error occurred while sending Telegram message:", e)
+
 
 def live_trading():
     """Execute live trading based on SMA strategy"""
