@@ -364,7 +364,7 @@ def live_trading():
 
         except Exception as e:
             print("An error occurred:", e)
-        time.sleep(60*30)  # Wait for 30 minutes before checking again
+        time.sleep(60*10)  # Wait for 10 minutes before checking again
 
 def test_run():
     """Test the SMA strategy on historical data"""
