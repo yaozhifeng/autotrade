@@ -16,6 +16,8 @@ TEST_MODE = os.getenv('TEST_MODE', 'True') == 'True'
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', 1000))
 TRADE_SYMBOL = os.getenv('TRADE_SYMBOL', 'BNBUSDT')
 TRADE_QUANTITY = float(os.getenv('TRADE_QUANTITY', 1))
+SHORT_PERIOD = int(os.getenv('SHORT_PERIOD', 7))
+LONG_PERIOD = int(os.getenv('LONG_PERIOD', 26))
 INTERVAL = os.getenv('INTERVAL', '15m')
 LOOKBACK = int(os.getenv('LOOKBACK', 5))
 TRADING_FEE = float(os.getenv('TRADING_FEE', 0.001))
@@ -37,12 +39,12 @@ def fetch_historical_data(symbol, interval, limit=500):
         'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume',
         'taker_buy_quote_asset_volume', 'ignore'
     ])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Shanghai')
     df.set_index('timestamp', inplace=True)
     df['close'] = df['close'].astype(float)
     return df[['close']]
 
-def calculate_macd(df, short_period=12, long_period=26, signal_period=9):
+def calculate_macd(df, short_period=SHORT_PERIOD, long_period=LONG_PERIOD, signal_period=9):
     """Calculate MACD indicators"""
     df['macd'] = df['close'].ewm(span=short_period, adjust=False).mean() - df['close'].ewm(span=long_period, adjust=False).mean()
     df['signal'] = df['macd'].ewm(span=signal_period, adjust=False).mean()
@@ -249,7 +251,7 @@ def live_trading():
     while True:
         try:
             # Fetch historical data
-            df = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LOOKBACK)
+            df = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LONG_PERIOD*2)
             df = calculate_macd(df)
             df = generate_signals(df)
 

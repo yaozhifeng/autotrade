@@ -18,8 +18,8 @@ TEST_MODE = os.getenv('TEST_MODE', 'True') == 'True'
 INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', 1000))
 TRADE_SYMBOL = os.getenv('TRADE_SYMBOL', 'BNBUSDT')
 TRADE_QUANTITY = float(os.getenv('TRADE_QUANTITY', 1))
-SHORT_SMA = int(os.getenv('SHORT_SMA', 20))
-LONG_SMA = int(os.getenv('LONG_SMA', 50))
+SHORT_PERIOD = int(os.getenv('SHORT_PERIOD', 20))
+LONG_PERIOD = int(os.getenv('LONG_PERIOD', 50))
 INTERVAL = os.getenv('INTERVAL', '15m')
 LOOKBACK = int(os.getenv('LOOKBACK', 5))
 TRADING_FEE = float(os.getenv('TRADING_FEE', 0.001))
@@ -103,11 +103,6 @@ def generate_signals(df):
     df['signal'] = 0
     df['short_prev'] = df['short_ema'].shift(1)
     df['long_prev'] = df['long_ema'].shift(1)
-
-    # # Buy signal (short SMA crosses above long SMA)
-    # df.loc[(df['short_sma'] > df['long_sma']) & (df['short_prev'] <= df['long_prev']), 'signal'] = 1
-    # # Sell signal (short SMA crosses below long SMA)
-    # df.loc[(df['short_sma'] < df['long_sma']) & (df['short_prev'] >= df['long_prev']), 'signal'] = -1
 
     # Buy signal (short EMA crosses above long EMA)
     df.loc[(df['short_ema'] > df['long_ema']) & (df['short_prev'] <= df['long_prev']), 'signal'] = 1
@@ -304,14 +299,13 @@ def live_trading():
     while True:
         try:
             # Fetch historical data
-            df = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LONG_SMA*2)
-            df = calculate_ema(df, SHORT_SMA, LONG_SMA)
+            df = fetch_historical_data(TRADE_SYMBOL, INTERVAL, LONG_PERIOD*2)
+            df = calculate_ema(df, SHORT_PERIOD, LONG_PERIOD)
             df = generate_signals(df)
 
             # Get latest signal
             latest_row = df.iloc[-1]
             latest_signal = latest_row['signal']
-            latest_price = latest_row['close']
             latest_timestamp = latest_row['timestamp']
             current_price = float(client.get_symbol_ticker(symbol=TRADE_SYMBOL)['price'])
             current_time = datetime.datetime.now(datetime.timezone.utc).astimezone(datetime.timezone(datetime.timedelta(hours=8)))
@@ -369,7 +363,7 @@ def live_trading():
 def test_run():
     """Test the SMA strategy on historical data"""
     data = fetch_historical_data(TRADE_SYMBOL, INTERVAL)
-    data = calculate_ema(data, SHORT_SMA, LONG_SMA)
+    data = calculate_ema(data, SHORT_PERIOD, LONG_PERIOD)
     data = generate_signals(data)
     backtest_strategy(data, INITIAL_BALANCE)
 
