@@ -267,21 +267,22 @@ class DynamicGridTrader:
                             
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
+                            new_price = order_info['price'] * (1 + 0.01) if new_side == 'BUY' else order_info['price'] * (1 - 0.01)
                             new_order = self.client.create_order(
                                 symbol=self.symbol,
                                 side=new_side,
                                 type=ORDER_TYPE_LIMIT,
                                 timeInForce=TIME_IN_FORCE_GTC,
                                 quantity=self.quantity,
-                                price=f"{order_info['price']:.2f}"
+                                price=f"{new_price:.2f}"
                             )
                             
                             self.orders[new_order['orderId']] = {
-                                'price': order_info['price'],
+                                'price': new_price,
                                 'side': new_side,
                                 'status': 'OPEN'
                             }
-                            self.logger.info(f"新订单已创建: {new_side} {order_info['price']:.2f} USDT")
+                            self.logger.info(f"新订单已创建: {new_side} {new_price:.2f} USDT")
                             
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
@@ -309,6 +310,6 @@ def main():
     bot = DynamicGridTrader(**config)
     bot.run()
     bot.cancel_all_orders()
-    
+
 if __name__ == "__main__":
     main()
