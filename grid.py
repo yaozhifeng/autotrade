@@ -9,118 +9,243 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 
-TEST_NET = os.getenv('TEST_NET', 'True') == 'True'
+# Load environment variables from .env file
+load_dotenv(override=True)
 
 
-class DynamicGridTrader:
+class AdaptiveGridTrader:
     def __init__(self, api_key, api_secret, symbol='LTCUSDT',
                  grid_levels=10, initial_grid_width=0.1,
-                 quantity_per_grid=0.1, volatility_window=24,
-                 trend_window=12):
+                 base_quantity=0.1, leverage=1):
         """
-        初始化动态网格交易机器人
+        初始化自适应网格交易机器人
         :param api_key: 币安API密钥
         :param api_secret: 币安API密钥
         :param symbol: 交易对
         :param grid_levels: 网格数量
         :param initial_grid_width: 初始网格宽度（百分比）
-        :param quantity_per_grid: 每个网格的交易数量
-        :param volatility_window: 波动率计算窗口（小时）
-        :param trend_window: 趋势计算窗口（小时）
+        :param base_quantity: 基础交易数量
+        :param leverage: 杠杆倍数
         """
-        self.client = Client(api_key, api_secret, testnet=TEST_NET)
+        self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET'))
         self.symbol = symbol
         self.grid_levels = grid_levels
         self.initial_grid_width = initial_grid_width
-        self.quantity = quantity_per_grid
-        self.volatility_window = volatility_window
-        self.trend_window = trend_window
+        self.base_quantity = base_quantity
+        self.leverage = leverage
         
-        # 设置日志
+        # 趋势判断参数
+        self.trend_params = {
+            'short_window': 7,   # 短期均线
+            'medium_window': 25,  # 中期均线
+            'long_window': 50,    # 长期均线
+            'rsi_period': 14,     # RSI周期
+            'macd_fast': 12,      # MACD快线
+            'macd_slow': 26,      # MACD慢线
+            'macd_signal': 9      # MACD信号线
+        }
+        
+        # 策略参数
+        self.strategy_params = {
+            'trend_threshold': 0.02,     # 趋势判断阈值
+            'strong_trend': 0.05,        # 强趋势阈值
+            'volume_scale': 1.5,         # 顺势交易量倍数
+            'grid_asymmetry': 0.3,       # 网格不对称度
+            'min_profit': 0.01          # 最小利润率
+        }
+        
+        self._setup_logging()
+        self.orders = {}
+        self.position = {}
+        self.current_trend = None
+        self.trend_strength = 0
+        
+    def _setup_logging(self):
+        """设置日志系统"""
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler('dynamic_grid_trader.log'),
+                logging.FileHandler('adaptive_grid_trader.log'),
                 logging.StreamHandler()
             ]
         )
         self.logger = logging.getLogger(__name__)
-        
-        # 初始化订单和网格状态
-        self.orders = {}
-        self.current_grid = None
-        self.last_adjustment_time = None
-        
-        # 设置调整参数
-        self.adjustment_threshold = 0.05  # 5%价格变化触发调整
-        self.min_adjustment_interval = 3600  # 最小调整间隔（秒）
 
-    def get_market_data(self):
-        """获取市场数据"""
-        end_time = datetime.now()
-        start_time = end_time - timedelta(hours=max(self.volatility_window, self.trend_window))
-        
-        # 获取K线数据
-        klines = self.client.get_historical_klines(
-            self.symbol,
-            Client.KLINE_INTERVAL_1HOUR,
-            start_time.strftime("%Y-%m-%d %H:%M:%S"),
-            end_time.strftime("%Y-%m-%d %H:%M:%S")
+    def get_market_data(self, interval='30m', limit=100):
+        """获取市场数据并计算技术指标"""
+        klines = self.client.get_klines(
+            symbol=self.symbol,
+            interval=interval,
+            limit=limit
         )
         
-        # 转换为DataFrame
-        df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time',
-                                         'quote_volume', 'trades', 'taker_buy_base', 'taker_buy_quote', 'ignored'])
-        df['close'] = pd.to_numeric(df['close'])
+        df = pd.DataFrame(klines, columns=[
+            'timestamp', 'open', 'high', 'low', 'close', 'volume',
+            'close_time', 'quote_volume', 'trades', 'taker_buy_base',
+            'taker_buy_quote', 'ignored'
+        ])
+        
+        df = df.astype({
+            'close': 'float64',
+            'high': 'float64',
+            'low': 'float64',
+            'volume': 'float64'
+        })
+        
+        # 计算技术指标
+        df['ema_short'] = talib.EMA(df['close'], timeperiod=self.trend_params['short_window'])
+        df['ema_medium'] = talib.EMA(df['close'], timeperiod=self.trend_params['medium_window'])
+        df['ema_long'] = talib.EMA(df['close'], timeperiod=self.trend_params['long_window'])
+        df['rsi'] = talib.RSI(df['close'], timeperiod=self.trend_params['rsi_period'])
+        
+        # 计算MACD
+        macd, signal, hist = talib.MACD(
+            df['close'],
+            fastperiod=self.trend_params['macd_fast'],
+            slowperiod=self.trend_params['macd_slow'],
+            signalperiod=self.trend_params['macd_signal']
+        )
+        df['macd'] = macd
+        df['macd_signal'] = signal
+        df['macd_hist'] = hist
+        
         return df
 
-    def calculate_volatility(self, df):
-        """计算市场波动率"""
-        returns = np.log(df['close'] / df['close'].shift(1))
-        return returns.std() * np.sqrt(24)  # 年化波动率
-
-    def calculate_trend(self, df):
-        """计算市场趋势"""
-        # 使用EMA指标判断趋势
-        ema_short = talib.EMA(df['close'], timeperiod=self.trend_window)
-        ema_long = talib.EMA(df['close'], timeperiod=self.trend_window * 2)
+    def analyze_trend(self, df):
+        """分析市场趋势和强度"""
+        latest = df.iloc[-1]
+        
+        # 趋势信号计算
+        trend_signals = {
+            'ema_trend': (
+                1 if latest['ema_short'] > latest['ema_medium'] > latest['ema_long']
+                else -1 if latest['ema_short'] < latest['ema_medium'] < latest['ema_long']
+                else 0
+            ),
+            'rsi_trend': (
+                1 if latest['rsi'] > 60
+                else -1 if latest['rsi'] < 40
+                else 0
+            ),
+            'macd_trend': (
+                1 if latest['macd'] > latest['macd_signal'] and latest['macd_hist'] > 0
+                else -1 if latest['macd'] < latest['macd_signal'] and latest['macd_hist'] < 0
+                else 0
+            )
+        }
+        
+        # 综合趋势判断
+        trend_score = sum(trend_signals.values()) / len(trend_signals)
         
         # 计算趋势强度
-        trend_strength = (ema_short - ema_long) / ema_long
-        return trend_strength.iloc[-1]
+        strength = abs(trend_score)
+        
+        # 更新趋势状态
+        self.current_trend = (
+            'STRONG_UP' if trend_score > self.strategy_params['strong_trend']
+            else 'UP' if trend_score > self.strategy_params['trend_threshold']
+            else 'STRONG_DOWN' if trend_score < -self.strategy_params['strong_trend']
+            else 'DOWN' if trend_score < -self.strategy_params['trend_threshold']
+            else 'NEUTRAL'
+        )
+        self.trend_strength = strength
+        
+        self.logger.info(f"趋势分析 - 方向: {self.current_trend}, 强度: {strength:.3f}")
+        return self.current_trend, strength
 
-    def adjust_grid_parameters(self):
-        """调整网格参数"""
-        try:
-            # 获取市场数据
-            df = self.get_market_data()
-            current_price = float(df['close'].iloc[-1])
-            volatility = self.calculate_volatility(df)
-            trend = self.calculate_trend(df)
-            
-            # 根据波动率调整网格宽度
-            grid_width = self.initial_grid_width * (1 + volatility)
-            
-            # 根据趋势调整网格中心
-            grid_center = current_price * (1 + trend * 0.1)
-            
-            # 计算新的网格范围
-            grid_range = current_price * grid_width
-            lower_price = grid_center - grid_range/2
-            upper_price = grid_center + grid_range/2
-            
-            # 计算新的网格价格
-            self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
-            
-            self.logger.info(f"网格参数已调整 - 波动率: {volatility:.4f}, 趋势: {trend:.4f}")
-            self.logger.info(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"调整网格参数失败: {str(e)}")
-            return False
+    def calculate_grid_parameters(self, current_price):
+        """根据趋势计算网格参数"""
+        base_width = self.initial_grid_width * current_price
+        
+        if self.current_trend in ['STRONG_UP', 'STRONG_DOWN']:
+            # 强趋势时增加网格宽度
+            grid_width = base_width * (1 + self.trend_strength)
+            # 调整网格分布的不对称性
+            asymmetry = self.strategy_params['grid_asymmetry'] * (
+                1 if self.current_trend == 'STRONG_UP' else -1
+            )
+        else:
+            grid_width = base_width
+            asymmetry = 0
+        
+        # 计算网格范围
+        grid_center = current_price * (1 + asymmetry)
+        lower_price = grid_center - grid_width/2
+        upper_price = grid_center + grid_width/2
+        
+        return lower_price, upper_price
+
+    def calculate_order_quantity(self, price, side):
+        """根据趋势强度调整订单数量"""
+        base_qty = self.base_quantity
+        
+        # 根据趋势调整交易量
+        if self.current_trend in ['STRONG_UP', 'STRONG_DOWN']:
+            if (self.current_trend == 'STRONG_UP' and side == 'BUY') or \
+               (self.current_trend == 'STRONG_DOWN' and side == 'SELL'):
+                # 顺势加倍
+                qty = base_qty * self.strategy_params['volume_scale']
+            else:
+                # 逆势减半
+                qty = base_qty * 0.5
+        else:
+            qty = base_qty
+        
+        return qty
+
+    def place_dynamic_grid_orders(self):
+        """放置动态网格订单"""
+        current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+        lower_price, upper_price = self.calculate_grid_parameters(current_price)
+        
+        # 取消现有订单
+        self.cancel_all_orders()
+        
+        # 计算网格价格
+        grid_prices = np.linspace(lower_price, upper_price, self.grid_levels)
+        
+        for price in grid_prices:
+            try:
+                if price < current_price:
+                    # 买单
+                    qty = self.calculate_order_quantity(price, 'BUY')
+                    order = self.client.create_order(
+                        symbol=self.symbol,
+                        side=SIDE_BUY,
+                        type=ORDER_TYPE_LIMIT,
+                        timeInForce=TIME_IN_FORCE_GTC,
+                        quantity=f"{qty:.4f}",
+                        price=f"{price:.2f}"
+                    )
+                    self.orders[order['orderId']] = {
+                        'price': price,
+                        'quantity': qty,
+                        'side': 'BUY',
+                        'status': 'OPEN'
+                    }
+                else:
+                    # 卖单
+                    qty = self.calculate_order_quantity(price, 'SELL')
+                    order = self.client.create_order(
+                        symbol=self.symbol,
+                        side=SIDE_SELL,
+                        type=ORDER_TYPE_LIMIT,
+                        timeInForce=TIME_IN_FORCE_GTC,
+                        quantity=f"{qty:.4f}",
+                        price=f"{price:.2f}"
+                    )
+                    self.orders[order['orderId']] = {
+                        'price': price,
+                        'quantity': qty,
+                        'side': 'SELL',
+                        'status': 'OPEN'
+                    }
+                
+                self.logger.info(f"下单成功: {price:.2f} USDT, 数量: {qty:.4f}")
+                
+            except Exception as e:
+                self.logger.error(f"下单失败: {str(e)}")
 
     def cancel_all_orders(self):
         """取消所有未成交订单"""
@@ -136,140 +261,87 @@ class DynamicGridTrader:
         except Exception as e:
             self.logger.error(f"取消订单失败: {str(e)}")
 
-    def place_grid_orders(self):
-        """放置网格订单"""
-        if self.current_grid is None:
-            self.adjust_grid_parameters()
-        
-        current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
-        
-        for price in self.current_grid:
-            try:
-                if price < current_price:
-                    # 在当前价格下方放置买单
-                    order = self.client.create_order(
-                        symbol=self.symbol,
-                        side=SIDE_BUY,
-                        type=ORDER_TYPE_LIMIT,
-                        timeInForce=TIME_IN_FORCE_GTC,
-                        quantity=self.quantity,
-                        price=f"{price:.2f}"
-                    )
-                    self.orders[order['orderId']] = {
-                        'price': price,
-                        'side': 'BUY',
-                        'status': 'OPEN'
-                    }
-                else:
-                    # 在当前价格上方放置卖单
-                    order = self.client.create_order(
-                        symbol=self.symbol,
-                        side=SIDE_SELL,
-                        type=ORDER_TYPE_LIMIT,
-                        timeInForce=TIME_IN_FORCE_GTC,
-                        quantity=self.quantity,
-                        price=f"{price:.2f}"
-                    )
-                    self.orders[order['orderId']] = {
-                        'price': price,
-                        'side': 'SELL',
-                        'status': 'OPEN'
-                    }
-                
-                self.logger.info(f"下单成功: {price:.2f} USDT")
-                
-            except Exception as e:
-                self.logger.error(f"下单失败: {str(e)}")
-
-    def should_adjust_grid(self):
-        """判断是否需要调整网格"""
-        if self.current_grid is None or self.last_adjustment_time is None:
-            return True
-            
-        current_time = time.time()
-        current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
-        
-        # 检查时间间隔
-        if current_time - self.last_adjustment_time < self.min_adjustment_interval:
-            return False
-            
-        # 检查价格变化
-        grid_center = np.mean(self.current_grid)
-        price_change = abs(current_price - grid_center) / grid_center
-        
-        return price_change > self.adjustment_threshold
-
     def run(self):
-        """运行动态网格交易机器人"""
-        self.logger.info("启动动态网格交易机器人...")
+        """运行自适应网格交易机器人"""
+        self.logger.info("启动自适应网格交易机器人...")
         self.logger.info(f"交易对: {self.symbol}")
         
         while True:
             try:
-                # 检查是否需要调整网格
-                if self.should_adjust_grid():
-                    self.logger.info("开始调整网格...")
-                    self.cancel_all_orders()
-                    self.adjust_grid_parameters()
-                    self.place_grid_orders()
-                    self.last_adjustment_time = time.time()
+                # 获取和分析市场数据
+                market_data = self.get_market_data()
+                self.analyze_trend(market_data)
+                
+                # 更新网格订单
+                if self.trend_strength > self.strategy_params['trend_threshold']:
+                    self.place_dynamic_grid_orders()
                 
                 # 检查订单状态
-                for order_id, order_info in list(self.orders.items()):
-                    try:
-                        order_status = self.client.get_order(
-                            symbol=self.symbol,
-                            orderId=order_id
-                        )
-                        
-                        if order_status['status'] == 'FILLED':
-                            self.logger.info(f"订单已成交: {order_info['price']:.2f} USDT")
-                            self.orders.pop(order_id)
-                            
-                            # 放置反向订单
-                            new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
-                            new_order = self.client.create_order(
-                                symbol=self.symbol,
-                                side=new_side,
-                                type=ORDER_TYPE_LIMIT,
-                                timeInForce=TIME_IN_FORCE_GTC,
-                                quantity=self.quantity,
-                                price=f"{order_info['price']:.2f}"
-                            )
-                            
-                            self.orders[new_order['orderId']] = {
-                                'price': order_info['price'],
-                                'side': new_side,
-                                'status': 'OPEN'
-                            }
-                            
-                    except Exception as e:
-                        self.logger.error(f"检查订单状态失败: {str(e)}")
+                self.check_and_handle_filled_orders()
                 
-                time.sleep(30)
+                # 等待更新
+                time.sleep(60)
                 
             except Exception as e:
                 self.logger.error(f"运行错误: {str(e)}")
                 time.sleep(5)
 
+    def check_and_handle_filled_orders(self):
+        """检查和处理已成交订单"""
+        for order_id, order_info in list(self.orders.items()):
+            try:
+                order_status = self.client.get_order(
+                    symbol=self.symbol,
+                    orderId=order_id
+                )
+                
+                if order_status['status'] == 'FILLED':
+                    self.logger.info(f"订单已成交: {order_info['price']:.2f} USDT")
+                    self.orders.pop(order_id)
+                    
+                    # 计算新的反向订单
+                    new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
+                    new_price = order_info['price'] * (
+                        1 + self.strategy_params['min_profit'] if new_side == 'SELL'
+                        else 1 - self.strategy_params['min_profit']
+                    )
+                    new_qty = self.calculate_order_quantity(new_price, new_side)
+                    
+                    # 放置反向订单
+                    new_order = self.client.create_order(
+                        symbol=self.symbol,
+                        side=new_side,
+                        type=ORDER_TYPE_LIMIT,
+                        timeInForce=TIME_IN_FORCE_GTC,
+                        quantity=f"{new_qty:.4f}",
+                        price=f"{new_price:.2f}"
+                    )
+                    
+                    self.orders[new_order['orderId']] = {
+                        'price': new_price,
+                        'quantity': new_qty,
+                        'side': new_side,
+                        'status': 'OPEN'
+                    }
+                    
+            except Exception as e:
+                self.logger.error(f"检查订单状态失败: {str(e)}")
+
 def main():
     # 配置参数
-    # Load environment variables from .env file
-    load_dotenv()
 
     config = {
         'api_key': os.getenv('API_KEY'),
         'api_secret': os.getenv('API_SECRET'),
-        'symbol': 'LTCUSDT',
+        'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
         'grid_levels': 10,
         'initial_grid_width': 0.1,  # 初始网格宽度为10%
-        'quantity_per_grid': 0.1,   # 每个网格的交易数量
-        'volatility_window': 24,    # 24小时波动率窗口
-        'trend_window': 12          # 12小时趋势窗口
+        'base_quantity': 0.1,       # 基础交易数量
+        'leverage': 1               # 杠杆倍数
     }
     
-    # 创建并运行动态网格交易机器人
-    bot = DynamicGridTrader(**config)
+    # 创建并运行自适应网格交易机器人
+    bot = AdaptiveGridTrader(**config)
     bot.run()
 
 if __name__ == "__main__":
