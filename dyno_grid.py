@@ -8,10 +8,22 @@ import logging
 from datetime import datetime, timedelta
 from pytz import timezone
 from dotenv import load_dotenv
+import requests
 import os
 
 # Load environment variables from .env file
 load_dotenv()
+
+def send_telegram_message(msg):
+    """Send a message to a Telegram channel"""
+    try:
+        chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
+        url = f"https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}"
+        response = requests.get(url)
+        print("Telegram message sent successfully")
+    except Exception as e:
+        print("An error occurred while sending Telegram message:", e)
 
 
 class DynamicGridTrader:
@@ -39,6 +51,7 @@ class DynamicGridTrader:
         self.trend_window = trend_window
         
         # 设置日志
+        shanghai_tz = timezone('Asia/Shanghai')
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
@@ -47,6 +60,13 @@ class DynamicGridTrader:
                 logging.StreamHandler()
             ]
         )
+        self.logger = logging.getLogger(__name__)
+        for handler in self.logger.handlers:
+            handler.setFormatter(logging.Formatter(
+                fmt='%(asctime)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            ))
+            handler.formatter.converter = lambda *args: datetime.now(shanghai_tz).timetuple()
         
         # 初始化订单和网格状态
         self.orders = {}
@@ -255,26 +275,54 @@ class DynamicGridTrader:
                         
                         if order_status['status'] == 'FILLED':
                             self.logger.info(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
+                            send_telegram_message(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
                             self.orders.pop(order_id)
                             
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
                             new_price = order_info['price'] * (1 + 0.01) if new_side == 'BUY' else order_info['price'] * (1 - 0.01)
-                            new_order = self.client.create_order(
-                                symbol=self.symbol,
-                                side=new_side,
-                                type=ORDER_TYPE_LIMIT,
-                                timeInForce=TIME_IN_FORCE_GTC,
-                                quantity=self.quantity,
-                                price=f"{new_price:.2f}"
-                            )
                             
-                            self.orders[new_order['orderId']] = {
-                                'price': new_price,
-                                'side': new_side,
-                                'status': 'OPEN'
-                            }
-                            self.logger.info(f"新订单已创建: {new_side} {new_price:.2f} USDT")
+                            # Check balance before placing reverse order
+                            if new_side == 'BUY':
+                                usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
+                                required_usdt = self.quantity * new_price
+                                if usdt_balance >= required_usdt:
+                                    new_order = self.client.create_order(
+                                        symbol=self.symbol,
+                                        side=new_side,
+                                        type=ORDER_TYPE_LIMIT,
+                                        timeInForce=TIME_IN_FORCE_GTC,
+                                        quantity=self.quantity,
+                                        price=f"{new_price:.2f}"
+                                    )
+                                    self.orders[new_order['orderId']] = {
+                                        'price': new_price,
+                                        'side': new_side,
+                                        'status': 'OPEN'
+                                    }
+                                    self.logger.info(f"新订单已创建: {new_side} {new_price:.2f} USDT")
+                                else:
+                                    self.logger.warning(f"Insufficient USDT balance to place buy order at {new_price:.2f} USDT")
+                            else:
+                                base_asset = self.symbol.replace('USDT', '')
+                                base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+                                if base_asset_balance >= self.quantity:
+                                    new_order = self.client.create_order(
+                                        symbol=self.symbol,
+                                        side=new_side,
+                                        type=ORDER_TYPE_LIMIT,
+                                        timeInForce=TIME_IN_FORCE_GTC,
+                                        quantity=self.quantity,
+                                        price=f"{new_price:.2f}"
+                                    )
+                                    self.orders[new_order['orderId']] = {
+                                        'price': new_price,
+                                        'side': new_side,
+                                        'status': 'OPEN'
+                                    }
+                                    self.logger.info(f"新订单已创建: {new_side} {new_price:.2f} USDT")
+                                else:
+                                    self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {new_price:.2f} USDT")
                             
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
