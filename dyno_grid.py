@@ -6,6 +6,7 @@ import pandas as pd
 import talib
 import logging
 from datetime import datetime, timedelta
+from pytz import timezone
 from dotenv import load_dotenv
 import os
 
@@ -38,6 +39,7 @@ class DynamicGridTrader:
         self.trend_window = trend_window
         
         # 设置日志
+        shanghai_tz = timezone('Asia/Shanghai')
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
@@ -47,6 +49,12 @@ class DynamicGridTrader:
             ]
         )
         self.logger = logging.getLogger(__name__)
+        for handler in self.logger.handlers:
+            handler.setFormatter(logging.Formatter(
+                fmt='%(asctime)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            ))
+            handler.formatter.converter = lambda *args: datetime.now(shanghai_tz).timetuple()
         
         # 初始化订单和网格状态
         self.orders = {}
@@ -300,6 +308,7 @@ def main():
     # 创建并运行动态网格交易机器人
     bot = DynamicGridTrader(**config)
     bot.run()
-
+    bot.cancel_all_orders()
+    
 if __name__ == "__main__":
     main()
