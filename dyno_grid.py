@@ -39,7 +39,6 @@ class DynamicGridTrader:
         self.trend_window = trend_window
         
         # 设置日志
-        shanghai_tz = timezone('Asia/Shanghai')
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
@@ -48,13 +47,6 @@ class DynamicGridTrader:
                 logging.StreamHandler()
             ]
         )
-        self.logger = logging.getLogger(__name__)
-        for handler in self.logger.handlers:
-            handler.setFormatter(logging.Formatter(
-                fmt='%(asctime)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            ))
-            handler.formatter.converter = lambda *args: datetime.now(shanghai_tz).timetuple()
         
         # 初始化订单和网格状态
         self.orders = {}
@@ -177,7 +169,7 @@ class DynamicGridTrader:
                             'side': 'BUY',
                             'status': 'OPEN'
                         }
-                        self.logger.info(f"下单成功: {order['side']} {order['price']} USDT")
+                        self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
                         usdt_balance -= required_usdt  # Update available USDT balance
                     else:
                         self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
@@ -198,7 +190,7 @@ class DynamicGridTrader:
                             'side': 'SELL',
                             'status': 'OPEN'
                         }
-                        self.logger.info(f"下单成功: {order['side']} {order['price']} USDT")
+                        self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
                         base_asset_balance -= self.quantity  # Update available base asset balance
                     else:
                         self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {price:.2f} USDT")
