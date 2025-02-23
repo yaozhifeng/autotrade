@@ -328,6 +328,10 @@ class DynamicGridTrader:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
                 
                 time.sleep(30)
+            except KeyboardInterrupt:
+                self.logger.info("检测到Ctrl+C，正在退出...")
+                self.cancel_all_orders()
+                break
                 
             except Exception as e:
                 self.logger.error(f"运行错误: {str(e)}")
@@ -341,7 +345,7 @@ def main():
         'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
         'grid_levels': 10,
         'initial_grid_width': 0.1,  # 初始网格宽度为10%
-        'quantity_per_grid': 0.1,   # 每个网格的交易数量
+        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
         'volatility_window': 24,    # 24小时波动率窗口
         'trend_window': 12          # 12小时趋势窗口
     }
@@ -349,7 +353,6 @@ def main():
     # 创建并运行动态网格交易机器人
     bot = DynamicGridTrader(**config)
     bot.run()
-    bot.cancel_all_orders()
 
 if __name__ == "__main__":
     main()
