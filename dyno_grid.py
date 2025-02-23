@@ -351,7 +351,7 @@ def main():
         'api_secret': os.getenv('API_SECRET'),
         'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
         'grid_levels': 10,
-        'initial_grid_width': 0.1,  # 初始网格宽度为10%
+        'initial_grid_width': float(os.getenv('INITIAL_GRID_WIDTH', 0.1)),  # 从环境变量加载初始网格宽度，默认10%
         'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
         'volatility_window': 24,    # 24小时波动率窗口
         'trend_window': 12          # 12小时趋势窗口
