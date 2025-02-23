@@ -244,11 +244,13 @@ class DynamicGridTrader:
     def check_portfolio(self):
         """检查投资组合"""
         usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
+        usdt_locked = float(self.client.get_asset_balance(asset='USDT')['locked'])
         base_asset = self.symbol.replace('USDT', '')
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+        base_asset_locked = float(self.client.get_asset_balance(asset=base_asset)['locked'])
         
-        self.logger.info(f"USDT: {usdt_balance:.2f}")
-        self.logger.info(f"{base_asset}: {base_asset_balance:.2f}")
+        self.logger.info(f"USDT: {usdt_balance:.2f} (Free), {usdt_locked:.2f} (Locked)")
+        self.logger.info(f"{base_asset}: {base_asset_balance:.2f} (Free), {base_asset_locked:.2f} (Locked)")
 
     def run(self):
         """运行动态网格交易机器人"""
