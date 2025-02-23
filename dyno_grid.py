@@ -327,6 +327,11 @@ class DynamicGridTrader:
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
                 
+                # Check if it's the top of the hour
+                if datetime.now().minute == 0 and datetime.now().second < 30:
+                    self.logger.info("整点记录订单情况...")
+                    self.show_orders()
+
                 time.sleep(30)
             except KeyboardInterrupt:
                 self.logger.info("检测到Ctrl+C，正在退出...")
