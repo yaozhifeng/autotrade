@@ -30,7 +30,7 @@ class DynamicGridTrader:
     def __init__(self, api_key, api_secret, symbol='LTCUSDT',
                  grid_levels=10, initial_grid_width=0.1,
                  quantity_per_grid=0.1, volatility_window=24,
-                 trend_window=12):
+                 trend_window=12, stop_loss=0.05, take_profit=0.1):
         """
         初始化动态网格交易机器人
         :param api_key: 币安API密钥
@@ -41,6 +41,8 @@ class DynamicGridTrader:
         :param quantity_per_grid: 每个网格的交易数量
         :param volatility_window: 波动率计算窗口（小时）
         :param trend_window: 趋势计算窗口（小时）
+        :param stop_loss: 止损百分比
+        :param take_profit: 止盈百分比
         """
         self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET'))
         self.symbol = symbol
@@ -49,6 +51,8 @@ class DynamicGridTrader:
         self.quantity = quantity_per_grid
         self.volatility_window = volatility_window
         self.trend_window = trend_window
+        self.stop_loss = stop_loss
+        self.take_profit = take_profit
         
         # 设置日志
         shanghai_tz = timezone('Asia/Shanghai')
@@ -334,6 +338,25 @@ class DynamicGridTrader:
                     self.logger.info("整点记录订单情况...")
                     self.show_orders()
 
+                # Risk management: Check for stop-loss and take-profit
+                current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+                total_buy_value = sum(order_info['price'] * self.quantity for order_info in self.orders.values() if order_info['side'] == 'BUY')
+                total_sell_value = sum(order_info['price'] * self.quantity for order_info in self.orders.values() if order_info['side'] == 'SELL')
+                net_position_value = total_buy_value - total_sell_value
+
+                if net_position_value > 0:
+                    average_buy_price = total_buy_value / (self.quantity * len([order for order in self.orders.values() if order['side'] == 'BUY']))
+                    if current_price <= average_buy_price * (1 - self.stop_loss):
+                        self.logger.info(f"触发止损: {average_buy_price:.2f} USDT")
+                        send_telegram_message(f"触发止损: {average_buy_price:.2f} USDT")
+                        self.cancel_all_orders()
+                        break
+                    elif current_price >= average_buy_price * (1 + self.take_profit):
+                        self.logger.info(f"触发止盈: {average_buy_price:.2f} USDT")
+                        send_telegram_message(f"触发止盈: {average_buy_price:.2f} USDT")
+                        self.cancel_all_orders()
+                        break
+
                 time.sleep(30)
             except KeyboardInterrupt:
                 self.logger.info("检测到Ctrl+C，正在退出...")
@@ -354,7 +377,9 @@ def main():
         'initial_grid_width': float(os.getenv('INITIAL_GRID_WIDTH', 0.1)),  # 从环境变量加载初始网格宽度，默认10%
         'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
         'volatility_window': 24,    # 24小时波动率窗口
-        'trend_window': 12          # 12小时趋势窗口
+        'trend_window': 12,         # 12小时趋势窗口
+        'stop_loss': float(os.getenv('STOP_LOSS', 0.05)),  # 从环境变量加载止损百分比，默认5%
+        'take_profit': float(os.getenv('TAKE_PROFIT', 0.1))  # 从环境变量加载止盈百分比，默认10%
     }
     
     # 创建并运行动态网格交易机器人
