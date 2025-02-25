@@ -131,7 +131,6 @@ class DynamicGridTrader:
             send_telegram_message(f"网格参数已调整 - 波动率: {volatility:.4f}, 趋势: {trend:.4f}")
             self.logger.info(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
             send_telegram_message(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
-            self.show_orders()
             
             return True
             
@@ -303,7 +302,6 @@ class DynamicGridTrader:
                             send_telegram_message(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
                             self.orders.pop(order_id)
 
-                            self.check_portfolio()
                             
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
@@ -350,6 +348,8 @@ class DynamicGridTrader:
                                     self.logger.info(f"新订单已创建: {new_side} {new_price:.2f} USDT")
                                 else:
                                     self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {new_price:.2f} USDT")
+                            
+                            self.check_portfolio()
                             
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
