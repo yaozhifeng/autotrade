@@ -73,7 +73,7 @@ class DynamicGridTrader:
     def get_market_data(self):
         """获取市场数据"""
         end_time = datetime.now()
-        start_time = end_time - timedelta(hours=max(self.volatility_window, self.trend_window))
+        start_time = end_time - timedelta(hours=max(self.volatility_window, self.trend_window)*2)
         
         # 获取K线数据
         klines = self.client.get_historical_klines(
