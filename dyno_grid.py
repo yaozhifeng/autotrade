@@ -78,7 +78,7 @@ class DynamicGridTrader:
         # 获取K线数据
         klines = self.client.get_historical_klines(
             self.symbol,
-            os.getenv('INTERVAL', '30m'),
+            Client.KLINE_INTERVAL_1HOUR,
             start_time.strftime("%Y-%m-%d %H:%M:%S"),
             end_time.strftime("%Y-%m-%d %H:%M:%S")
         )
