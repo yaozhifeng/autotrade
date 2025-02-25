@@ -293,6 +293,8 @@ class DynamicGridTrader:
                             self.logger.info(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
                             send_telegram_message(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
                             self.orders.pop(order_id)
+
+                            self.check_portfolio()
                             
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
