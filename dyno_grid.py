@@ -232,8 +232,9 @@ class DynamicGridTrader:
 
     def show_orders(self):
         """显示当前订单"""
-        for order_id, order_info in self.orders.items():
-            self.logger.info(f"订单: {order_info['side']} {order_info['price']:.2f} USDT")
+        open_orders = self.client.get_open_orders(symbol=self.symbol)
+        for order in open_orders:
+            self.logger.info(f"订单: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
 
     def check_portfolio(self):
         """检查投资组合"""
@@ -363,7 +364,8 @@ class DynamicGridTrader:
                 self.logger.error(f"运行错误: {str(e)}")
                 time.sleep(5)
 
-def main():
+
+def get_bot():
     # 配置参数
     config = {
         'api_key': os.getenv('API_KEY'),
@@ -378,7 +380,8 @@ def main():
     
     # 创建并运行动态网格交易机器人
     bot = DynamicGridTrader(**config)
-    bot.run()
+    return bot
 
 if __name__ == "__main__":
-    main()
+    bot = get_bot()
+    bot.run()
