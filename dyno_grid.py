@@ -254,6 +254,7 @@ class DynamicGridTrader:
         total_balance += base_asset_balance * current_price
         total_balance += base_asset_locked * current_price
         self.logger.info(f"Total balance: {total_balance:.2f} USDT")
+        send_telegram_message(f"Total balance: {total_balance:.2f} USDT")
 
     def run(self):
         """运行动态网格交易机器人"""
