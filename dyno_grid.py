@@ -3,7 +3,6 @@ from binance.client import Client
 from binance.enums import *
 import numpy as np
 import pandas as pd
-import talib
 import logging
 from datetime import datetime, timedelta
 from pytz import timezone
@@ -97,8 +96,8 @@ class DynamicGridTrader:
     def calculate_trend(self, df):
         """计算市场趋势"""
         # 使用EMA指标判断趋势
-        ema_short = talib.EMA(df['close'], timeperiod=self.trend_window)
-        ema_long = talib.EMA(df['close'], timeperiod=self.trend_window * 2)
+        ema_short = df['close'].ewm(span=self.trend_window, adjust=False).mean()
+        ema_long = df['close'].ewm(span=self.trend_window * 2, adjust=False).mean()
         
         # 计算趋势强度
         trend_strength = (ema_short - ema_long) / ema_long
