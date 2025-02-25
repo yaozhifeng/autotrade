@@ -153,7 +153,7 @@ class DynamicGridTrader:
         except Exception as e:
             self.logger.error(f"取消订单失败: {str(e)}")
 
-    def place_grid_orders(self):
+    def place_grid_orders(self, buy_only = False, sell_only = False):
         """放置网格订单"""
         if self.current_grid is None:
             self.adjust_grid_parameters()
@@ -167,7 +167,7 @@ class DynamicGridTrader:
         
         for price in self.current_grid:
             try:
-                if price < current_price:
+                if price < current_price and not sell_only:
                     # Check if there is enough USDT balance to place a buy order
                     required_usdt = self.quantity * price
                     if usdt_balance >= required_usdt:
@@ -189,7 +189,7 @@ class DynamicGridTrader:
                         usdt_balance -= required_usdt  # Update available USDT balance
                     else:
                         self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
-                else:
+                elif price >= current_price and not buy_only:
                     # Check if there is enough base asset balance to place a sell order
                     if base_asset_balance >= self.quantity:
                         # Place sell order
@@ -256,6 +256,22 @@ class DynamicGridTrader:
         self.logger.info(f"Total balance: {total_balance:.2f} USDT")
         send_telegram_message(f"Total balance: {total_balance:.2f} USDT")
 
+    def evaluate_rist(self):
+        """评估风险"""
+        # 检查投资组合, 看是否吃进了太多的资产，如果持有的加密币资产超过了预定的数量，就只卖出
+        base_asset = self.symbol.replace('USDT', '')
+        base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+        max_base_asset = float(os.getenv('MAX_BASE_ASSET', 10.0))  # Maximum allowed base asset balance
+
+        sell_only = False
+        
+        if base_asset_balance > max_base_asset:
+            self.logger.warning(f"{base_asset} balance exceeds the maximum allowed value. Cancelling all orders and stopping the bot.")
+            send_telegram_message(f"{base_asset} balance exceeds the maximum allowed value. Cancelling all orders and stopping the bot.")
+            sell_only = True
+
+        return sell_only
+    
     def run(self):
         """运行动态网格交易机器人"""
         self.logger.info("启动动态网格交易机器人...")
@@ -263,23 +279,14 @@ class DynamicGridTrader:
         
         while True:
             try:
-                # 检查投资组合, 看是否吃进了太多的资产，如果持有的加密币资产超过了预定的数量，就停止网格交易
-                base_asset = self.symbol.replace('USDT', '')
-                base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-                max_base_asset = float(os.getenv('MAX_BASE_ASSET', 10.0))  # Maximum allowed base asset balance
-                
-                if base_asset_balance > max_base_asset:
-                    self.logger.warning(f"{base_asset} balance exceeds the maximum allowed value. Cancelling all orders and stopping the bot.")
-                    send_telegram_message(f"{base_asset} balance exceeds the maximum allowed value. Cancelling all orders and stopping the bot.")
-                    self.cancel_all_orders()
-                    break
 
                 # 检查是否需要调整网格
                 if self.should_adjust_grid():
                     self.logger.info("开始调整网格...")
                     self.cancel_all_orders()
                     self.adjust_grid_parameters()
-                    self.place_grid_orders()
+                    sell_only = self.evaluate_rist()
+                    self.place_grid_orders(sell_only=sell_only)
                     self.last_adjustment_time = time.time()
                 
                 # 检查订单状态
