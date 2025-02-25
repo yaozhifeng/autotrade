@@ -248,6 +248,13 @@ class DynamicGridTrader:
         self.logger.info(f"USDT: {usdt_balance:.2f} (Free), {usdt_locked:.2f} (Locked)")
         self.logger.info(f"{base_asset}: {base_asset_balance:.2f} (Free), {base_asset_locked:.2f} (Locked)")
 
+        # calculate total balance in USDT, with base asset converted to USDT
+        total_balance = usdt_balance + usdt_locked
+        current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+        total_balance += base_asset_balance * current_price
+        total_balance += base_asset_locked * current_price
+        self.logger.info(f"Total balance: {total_balance:.2f} USDT")
+
     def run(self):
         """运行动态网格交易机器人"""
         self.logger.info("启动动态网格交易机器人...")
