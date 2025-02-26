@@ -226,9 +226,10 @@ class DynamicGridTrader:
             return False
         
         # Check if no trades have occurred in the last 24 hours
-        if self.last_trade_time and (time.time() - self.last_trade_time) > int(os.getenv('MAX_SILENT_HOUR', 24))*60*60:
-            self.logger.warning("No trades have occurred in the last 24 hours")
-            send_telegram_message("No trades have occurred in the last 24 hours")
+        max_silent_hour = int(os.getenv('MAX_SILENT_HOUR', 24))
+        if self.last_trade_time and (time.time() - self.last_trade_time) > max_silent_hour*60*60:
+            self.logger.warning(f"No trades have occurred in the last {max_silent_hour} hours")
+            send_telegram_message(f"No trades have occurred in the last {max_silent_hour} hours")
             self.last_trade_time = time.time()  # Reset the last trade time
             return True
 
