@@ -64,6 +64,7 @@ class DynamicGridTrader:
         self.orders = {}
         self.current_grid = None
         self.last_adjustment_time = None
+        self.last_trade_time = None  # Track the time of the last trade
         
         # 设置调整参数
         self.adjustment_threshold = 0.05  # 5%价格变化触发调整
@@ -223,7 +224,15 @@ class DynamicGridTrader:
         # 检查时间间隔
         if current_time - self.last_adjustment_time < self.min_adjustment_interval:
             return False
-            
+        
+        # Check if no trades have occurred in the last 24 hours
+        if self.last_trade_time and (time.time() - self.last_trade_time) > int(os.getenv('MAX_SILENT_HOUR', 24))*60*60:
+            self.logger.warning("No trades have occurred in the last 24 hours")
+            send_telegram_message("No trades have occurred in the last 24 hours")
+            self.last_trade_time = time.time()  # Reset the last trade time
+            return True
+
+
         # 检查价格变化
         grid_center = np.mean(self.current_grid)
         price_change = abs(current_price - grid_center) / grid_center
@@ -301,7 +310,7 @@ class DynamicGridTrader:
                             self.logger.info(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
                             send_telegram_message(f"订单已成交: {order_info['side']} {order_info['price']:.2f} USDT")
                             self.orders.pop(order_id)
-
+                            self.last_trade_time = time.time()  # Update the last trade time
                             
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
