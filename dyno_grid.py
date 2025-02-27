@@ -126,6 +126,7 @@ class DynamicGridTrader:
             
             # 计算新的网格价格
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
+            self.grid_gap = self.current_grid[1] - self.current_grid[0]
             
             self.logger.info(f"网格参数已调整 - 波动率: {volatility:.4f}, 趋势: {trend:.4f}")
             send_telegram_message(f"网格参数已调整 - 波动率: {volatility:.4f}, 趋势: {trend:.4f}")
@@ -315,7 +316,7 @@ class DynamicGridTrader:
                             
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
-                            new_price = order_info['price'] * (1 - 0.01) if new_side == 'BUY' else order_info['price'] * (1 + 0.01)
+                            new_price = order_info['price'] - self.grid_gap if new_side == 'BUY' else order_info['price'] + self.grid_gap
                             
                             # Check balance before placing reverse order
                             if new_side == 'BUY':
