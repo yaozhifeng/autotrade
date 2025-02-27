@@ -244,7 +244,8 @@ class DynamicGridTrader:
     def show_orders(self):
         """显示当前订单"""
         open_orders = self.client.get_open_orders(symbol=self.symbol)
-        for order in open_orders:
+        sorted_orders = sorted(open_orders, key=lambda x: float(x['price']), reverse=True)
+        for order in sorted_orders:
             self.logger.info(f"订单: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
 
     def check_portfolio(self):
