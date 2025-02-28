@@ -48,6 +48,7 @@ class DynamicGridTrader:
         self.quantity = quantity_per_grid
         self.volatility_window = volatility_window
         self.trend_window = trend_window
+        self.last_update_id = None #Last telegram update id
         
         # 设置日志
         logging.basicConfig(
@@ -69,6 +70,29 @@ class DynamicGridTrader:
         # 设置调整参数
         self.adjustment_threshold = float(os.getenv('ADJUSTMENT_THRESHOLD', 0.05))  # 5%价格变化触发调整
         self.min_adjustment_interval = int(os.getenv('MIN_ADJUSTMENT_INTERVAL', 3600))  # 最小调整间隔（秒）
+
+    def answer_telegram(self):
+        """回答Telegram消息"""
+        try:
+            token = os.getenv('TELEGRAM_BOT_TOKEN')
+            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={self.last_update_id}"
+            response = requests.get(url)
+            data = response.json()
+            if data['ok']:
+                for message in data['result']:
+                    self.last_update_id = message['update_id'] + 1
+                    text = message['message']['text']
+                    self.logger.info(f"收到Telegram消息: {text}")
+                    if text == '/orders':
+                        self.show_orders()
+                    elif text == '/portfolio':
+                        self.check_portfolio()
+                    elif text == '/adjust':
+                        self.cancel_all_orders()
+                        self.current_grid = None
+                        self.last_adjustment_time = None
+        except Exception as e:
+            self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
     def get_market_data(self):
         """获取市场数据"""
@@ -247,6 +271,7 @@ class DynamicGridTrader:
         sorted_orders = sorted(open_orders, key=lambda x: float(x['price']), reverse=True)
         for order in sorted_orders:
             self.logger.info(f"订单: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
+            send_telegram_message(f"订单: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
 
     def check_portfolio(self):
         """检查投资组合"""
@@ -257,7 +282,9 @@ class DynamicGridTrader:
         base_asset_locked = float(self.client.get_asset_balance(asset=base_asset)['locked'])
         
         self.logger.info(f"USDT: {usdt_balance:.2f} (Free), {usdt_locked:.2f} (Locked)")
+        send_telegram_message(f"USDT: {usdt_balance:.2f} (Free), {usdt_locked:.2f} (Locked)")
         self.logger.info(f"{base_asset}: {base_asset_balance:.2f} (Free), {base_asset_locked:.2f} (Locked)")
+        send_telegram_message(f"{base_asset}: {base_asset_balance:.2f} (Free), {base_asset_locked:.2f} (Locked)")
 
         # calculate total balance in USDT, with base asset converted to USDT
         total_balance = usdt_balance + usdt_locked
@@ -291,6 +318,8 @@ class DynamicGridTrader:
         
         while True:
             try:
+                # 回答Telegram消息
+                self.answer_telegram()
 
                 # 检查是否需要调整网格
                 if self.should_adjust_grid():
@@ -360,8 +389,6 @@ class DynamicGridTrader:
                                     self.logger.info(f"新订单已创建: {new_side} {new_price:.2f} USDT")
                                 else:
                                     self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {new_price:.2f} USDT")
-                            
-                            self.check_portfolio()
                             
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
