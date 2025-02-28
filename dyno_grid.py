@@ -283,8 +283,8 @@ class DynamicGridTrader:
         
         self.logger.info(f"USDT: {usdt_balance:.2f} (Free), {usdt_locked:.2f} (Locked)")
         send_telegram_message(f"USDT: {usdt_balance:.2f} (Free), {usdt_locked:.2f} (Locked)")
-        self.logger.info(f"{base_asset}: {base_asset_balance:.2f} (Free), {base_asset_locked:.2f} (Locked)")
-        send_telegram_message(f"{base_asset}: {base_asset_balance:.2f} (Free), {base_asset_locked:.2f} (Locked)")
+        self.logger.info(f"{base_asset}: {base_asset_balance:.6f} (Free), {base_asset_locked:.6f} (Locked)")
+        send_telegram_message(f"{base_asset}: {base_asset_balance:.6f} (Free), {base_asset_locked:.6f} (Locked)")
 
         # calculate total balance in USDT, with base asset converted to USDT
         total_balance = usdt_balance + usdt_locked
