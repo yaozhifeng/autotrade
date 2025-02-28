@@ -41,7 +41,7 @@ class DynamicGridTrader:
         :param volatility_window: 波动率计算窗口（小时）
         :param trend_window: 趋势计算窗口（小时）
         """
-        self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET'))
+        self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET', 'False').lower() == 'true')
         self.symbol = symbol
         self.grid_levels = grid_levels
         self.initial_grid_width = initial_grid_width
