@@ -268,7 +268,7 @@ class DynamicGridTrader:
         if len(open_orders) > 0:
             high_price = max([float(order['price']) for order in open_orders])
             low_price = min([float(order['price']) for order in open_orders])
-            if current_price - self.grid_gap > high_price or current_price + self.grid_gap < low_price:
+            if current_price - self.grid_gap * 1.5 > high_price or current_price + self.grid_gap * 1.5 < low_price:
                 return True
             
         return False
@@ -326,18 +326,6 @@ class DynamicGridTrader:
         
         while True:
             try:
-                # 回答Telegram消息
-                self.answer_telegram()
-
-                # 检查是否需要调整网格
-                if self.should_adjust_grid():
-                    self.logger.info("开始调整网格...")
-                    self.cancel_all_orders()
-                    self.adjust_grid_parameters()
-                    sell_only = self.evaluate_risk()
-                    self.place_grid_orders(sell_only=sell_only)
-                    self.last_adjustment_time = time.time()
-                
                 # 检查订单状态
                 for order_id, order_info in list(self.orders.items()):
                     try:
@@ -400,6 +388,18 @@ class DynamicGridTrader:
                             
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
+
+                # 检查是否需要调整网格
+                if self.should_adjust_grid():
+                    self.logger.info("开始调整网格...")
+                    self.cancel_all_orders()
+                    self.adjust_grid_parameters()
+                    sell_only = self.evaluate_risk()
+                    self.place_grid_orders(sell_only=sell_only)
+                    self.last_adjustment_time = time.time()
+                
+                # 回答Telegram消息
+                self.answer_telegram()
                 
                 time.sleep(30)
             except KeyboardInterrupt:
