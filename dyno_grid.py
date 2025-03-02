@@ -68,7 +68,6 @@ class DynamicGridTrader:
         self.last_trade_time = None  # Track the time of the last trade
         
         # 设置调整参数
-        self.adjustment_threshold = float(os.getenv('ADJUSTMENT_THRESHOLD', 0.05))  # 5%价格变化触发调整
         self.min_adjustment_interval = int(os.getenv('MIN_ADJUSTMENT_INTERVAL', 3600))  # 最小调整间隔（秒）
 
     def answer_telegram(self):
