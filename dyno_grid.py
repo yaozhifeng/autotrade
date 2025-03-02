@@ -259,11 +259,15 @@ class DynamicGridTrader:
             return True
 
 
-        # 检查价格变化
-        grid_center = np.mean(self.current_grid)
-        price_change = abs(current_price - grid_center) / grid_center
-        
-        return price_change > self.adjustment_threshold
+        # 检查价格变化,如果超过当前网格，就调整网格
+        open_orders = self.client.get_open_orders(symbol=self.symbol)
+        if len(open_orders) > 0:
+            high_price = max([float(order['price']) for order in open_orders])
+            low_price = min([float(order['price']) for order in open_orders])
+            if current_price > high_price or current_price < low_price:
+                return True
+            
+        return False
 
     def show_orders(self):
         """显示当前订单"""
