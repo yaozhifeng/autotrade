@@ -132,10 +132,15 @@ class DynamicGridTrader:
         """调整网格参数"""
         try:
             # 获取市场数据
-            df = self.get_market_data()
-            current_price = float(df['close'].iloc[-1])
-            volatility = self.calculate_volatility(df)
-            trend = self.calculate_trend(df)
+            # df = self.get_market_data()
+            # current_price = float(df['close'].iloc[-1])
+            # volatility = self.calculate_volatility(df)
+            # trend = self.calculate_trend(df)
+
+            # 使用当前价格作为市场数据, 忽略波动率和趋势
+            current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+            volatility = 0
+            trend = 0
             
             # 根据波动率调整网格宽度
             grid_width = self.initial_grid_width * (1 + volatility)
