@@ -477,10 +477,11 @@ class DynamicGridTrader:
                 self.answer_telegram()
 
                 # 检查是否需要发送每日简报
-                if time.time() - self.last_briefing_time >= 21600:#86400:  # 24 hours
+                briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
+                if time.time() - self.last_briefing_time >= briefing_interval:
                     self.send_daily_briefing()
                     
-                time.sleep(30)
+                time.sleep(10)
             except KeyboardInterrupt:
                 self.logger.info("检测到Ctrl+C，正在退出...")
                 self.cancel_all_orders()
