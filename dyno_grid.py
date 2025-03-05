@@ -70,6 +70,73 @@ class DynamicGridTrader:
         # 设置调整参数
         self.min_adjustment_interval = int(os.getenv('MIN_ADJUSTMENT_INTERVAL', 3600))  # 最小调整间隔（秒）
 
+        # 初始化每日统计数据
+        self.daily_stats = {
+            'buy_orders': 0,
+            'sell_orders': 0,
+            'total_buy_price': 0.0,
+            'total_sell_price': 0.0,
+            'initial_balance': self.get_total_balance(),
+            'initial_price': self.get_current_price(),
+            'final_balance': 0.0,
+            'final_price': 0.0
+        }
+        self.last_briefing_time = time.time()
+
+    def get_current_price(self):
+        """获取当前价格"""
+        return float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+
+    def get_total_balance(self):
+        """获取总余额"""
+        usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
+        usdt_locked = float(self.client.get_asset_balance(asset='USDT')['locked'])
+        base_asset = self.symbol.replace('USDT', '')
+        base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+        base_asset_locked = float(self.client.get_asset_balance(asset=base_asset)['locked'])
+        
+        total_balance = usdt_balance + usdt_locked
+        current_price = self.get_current_price()
+        total_balance += base_asset_balance * current_price
+        total_balance += base_asset_locked * current_price
+        return total_balance
+
+    def send_daily_briefing(self):
+        """发送每日简报"""
+        self.daily_stats['final_balance'] = self.get_total_balance()
+        self.daily_stats['final_price'] = self.get_current_price()
+
+        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] if self.daily_stats['buy_orders'] > 0 else 0
+        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] if self.daily_stats['sell_orders'] > 0 else 0
+
+        briefing_msg = (
+            f"每日简报:\n"
+            f"买单数量: {self.daily_stats['buy_orders']}\n"
+            f"卖单数量: {self.daily_stats['sell_orders']}\n"
+            f"平均买入价格: {avg_buy_price:.2f} USDT\n"
+            f"平均卖出价格: {avg_sell_price:.2f} USDT\n"
+            f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
+            f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
+            f"初始价格: {self.daily_stats['initial_price']:.2f} USDT\n"
+            f"最终价格: {self.daily_stats['final_price']:.2f} USDT"
+        )
+        send_telegram_message(briefing_msg)
+        self.logger.info(briefing_msg)
+
+        # 重置每日统计数据
+        self.daily_stats = {
+            'buy_orders': 0,
+            'sell_orders': 0,
+            'total_buy_price': 0.0,
+            'total_sell_price': 0.0,
+            'initial_balance': self.get_total_balance(),
+            'initial_price': self.get_current_price(),
+            'final_balance': 0.0,
+            'final_price': 0.0
+        }
+        self.last_briefing_time = time.time()
+
+
     def answer_telegram(self):
         """回答Telegram消息"""
         try:
@@ -340,6 +407,14 @@ class DynamicGridTrader:
                             self.orders.pop(order_id)
                             self.last_trade_time = time.time()  # Update the last trade time
                             
+                            # Update daily stats
+                            if order_info['side'] == 'BUY':
+                                self.daily_stats['buy_orders'] += 1
+                                self.daily_stats['total_buy_price'] += order_info['price'] * self.quantity
+                            else:
+                                self.daily_stats['sell_orders'] += 1
+                                self.daily_stats['total_sell_price'] += order_info['price'] * self.quantity
+                            
                             # 放置反向订单
                             new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
                             new_price = order_info['price'] - self.grid_gap if new_side == 'BUY' else order_info['price'] + self.grid_gap
@@ -400,7 +475,11 @@ class DynamicGridTrader:
                 
                 # 回答Telegram消息
                 self.answer_telegram()
-                
+
+                # 检查是否需要发送每日简报
+                if time.time() - self.last_briefing_time >= 21600:#86400:  # 24 hours
+                    self.send_daily_briefing()
+                    
                 time.sleep(30)
             except KeyboardInterrupt:
                 self.logger.info("检测到Ctrl+C，正在退出...")
