@@ -125,7 +125,8 @@ class DynamicGridTrader:
             f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
             f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
             f"初始价格: {self.daily_stats['initial_price']:.2f} USDT\n"
-            f"最终价格: {self.daily_stats['final_price']:.2f} USDT"
+            f"最终价格: {self.daily_stats['final_price']:.2f} USDT\n"
+            f"统计周期: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         send_telegram_message(briefing_msg)
         self.logger.info(briefing_msg)
@@ -230,8 +231,8 @@ class DynamicGridTrader:
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
             self.grid_gap = self.current_grid[1] - self.current_grid[0]
             
-            self.logger.info(f"网格参数已调整 - 波动率: {volatility:.4f}, 趋势: {trend:.4f}")
-            send_telegram_message(f"网格参数已调整 - 波动率: {volatility:.4f}, 趋势: {trend:.4f}")
+            self.logger.info(f"网格参数已调整 - 当前价格: {current_price:.2f}")
+            send_telegram_message(f"网格参数已调整 - 当前价格: {current_price:.4f}")
             self.logger.info(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
             send_telegram_message(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
             
