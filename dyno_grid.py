@@ -493,6 +493,7 @@ class DynamicGridTrader:
             except KeyboardInterrupt:
                 self.logger.info("检测到Ctrl+C，正在退出...")
                 self.cancel_all_orders()
+                self.send_daily_briefing()
                 break
                 
             except Exception as e:
