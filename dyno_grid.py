@@ -109,8 +109,15 @@ class DynamicGridTrader:
         avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] if self.daily_stats['buy_orders'] > 0 else 0
         avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] if self.daily_stats['sell_orders'] > 0 else 0
 
+        gross_margin = (avg_sell_price - avg_buy_price) * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
+        fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * 0.001
+        net_profit = gross_margin - fee
+
         briefing_msg = (
             f"每日简报:\n"
+            f"毛利: {gross_margin:.2f} USDT\n"
+            f"手续费: {fee:.2f} USDT\n"
+            f"利润: {net_profit:.2f} USDT\n"
             f"买单数量: {self.daily_stats['buy_orders']}\n"
             f"卖单数量: {self.daily_stats['sell_orders']}\n"
             f"平均买入价格: {avg_buy_price:.2f} USDT\n"
