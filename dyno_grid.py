@@ -349,7 +349,7 @@ class DynamicGridTrader:
         if len(open_orders) > 0:
             high_price = max([float(order['price']) for order in open_orders])
             low_price = min([float(order['price']) for order in open_orders])
-            if current_price - self.grid_gap * 1.5 > high_price or current_price + self.grid_gap * 1.5 < low_price:
+            if current_price - self.grid_gap * 2 > high_price or current_price + self.grid_gap * 2 < low_price:
                 return True
             
         return False
