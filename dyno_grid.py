@@ -274,6 +274,9 @@ class DynamicGridTrader:
         usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
         
+        buy_orders_placed = 0
+        sell_orders_placed = 0
+        
         for price in self.current_grid:
             try:
                 if price < current_price and not sell_only:
@@ -296,6 +299,7 @@ class DynamicGridTrader:
                         }
                         self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
                         usdt_balance -= required_usdt  # Update available USDT balance
+                        buy_orders_placed += 1
                     else:
                         self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
                 elif price >= current_price and not buy_only:
@@ -317,11 +321,15 @@ class DynamicGridTrader:
                         }
                         self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
                         base_asset_balance -= self.quantity  # Update available base asset balance
+                        sell_orders_placed += 1
                     else:
                         self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {price:.2f} USDT")
                                 
             except Exception as e:
                 self.logger.error(f"下单失败: {str(e)}")
+        
+        self.logger.info(f"买单数量: {buy_orders_placed}, 卖单数量: {sell_orders_placed}")
+        send_telegram_message(f"买单数量: {buy_orders_placed}, 卖单数量: {sell_orders_placed}")
 
     def should_adjust_grid(self):
         """判断是否需要调整网格"""
