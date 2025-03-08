@@ -230,11 +230,17 @@ class DynamicGridTrader:
             # 计算新的网格价格
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
             self.grid_gap = self.current_grid[1] - self.current_grid[0]
-            
-            self.logger.info(f"网格参数已调整 - 当前价格: {current_price:.2f}")
-            send_telegram_message(f"网格参数已调整 - 当前价格: {current_price:.4f}")
-            self.logger.info(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
-            send_telegram_message(f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT")
+
+            profit_per_grid_percent = (self.initial_grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))) * 100
+
+            msg = f"网格参数已调整:\n"
+            msg += f"当前价格: {current_price:.2f} USDT\n"
+            msg += f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT\n"
+            msg += f"网格数量: {self.grid_levels}\n"
+            msg += f"网格间隔: {self.grid_gap:.2f} USDT\n"
+            msg += f"每格利润: {profit_per_grid_percent:.2f}%"
+            self.logger.info(msg)
+            send_telegram_message(msg)
             
             return True
             
