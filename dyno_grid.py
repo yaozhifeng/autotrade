@@ -231,7 +231,7 @@ class DynamicGridTrader:
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
             self.grid_gap = self.current_grid[1] - self.current_grid[0]
 
-            profit_per_grid_percent = (self.initial_grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))) * 100
+            profit_per_grid_percent = (self.initial_grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))*2) * 100
 
             msg = f"网格参数已调整:\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
