@@ -302,7 +302,7 @@ class DynamicGridTrader:
                         buy_orders_placed += 1
                     else:
                         self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
-                elif price >= current_price and not buy_only:
+                elif price > current_price and not buy_only:
                     # Check if there is enough base asset balance to place a sell order
                     if base_asset_balance >= self.quantity:
                         # Place sell order
