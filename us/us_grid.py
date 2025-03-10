@@ -495,8 +495,7 @@ class StockGridTrader:
                                 
                                 # Check balance before placing reverse order
                                 if new_side == 'BUY':
-                                    cash_info = self.trade_ctx.cash_info()
-                                    available_cash = float(cash_info.available_cash)
+                                    available_cash, _ = self.get_cash_balance()
                                     required_cash = self.quantity * new_price
                                     
                                     if available_cash >= required_cash:
@@ -518,12 +517,7 @@ class StockGridTrader:
                                     else:
                                         self.logger.warning(f"Insufficient cash to place buy order at {new_price:.2f} USD")
                                 else:
-                                    positions = self.trade_ctx.positions()
-                                    stock_position = 0
-                                    for position in positions:
-                                        if position.symbol == self.symbol:
-                                            stock_position = float(position.quantity)
-                                            break
+                                    stock_position = self.get_stock_position()
                                             
                                     if stock_position >= self.quantity:
                                         new_order = self.trade_ctx.submit_order(
