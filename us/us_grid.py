@@ -126,12 +126,13 @@ class StockGridTrader:
 
     def get_total_balance(self):
         """Get the total balance of the account"""
-        total_cash = self.get_cash_balance()
+        available_cash, frozen_cash = self.get_cash_balance()
         total_stock_value = self.get_stock_position() * self.get_current_price()
-        return total_cash + total_stock_value
+        return available_cash + frozen_cash + total_stock_value
         
     def get_cash_balance(self):
         """Get the cash balance of the account"""
+        """Return available cash and frozen cash"""
         try:
             account_balance = self.trade_ctx.account_balance()
             for balance in account_balance:
@@ -139,11 +140,11 @@ class StockGridTrader:
                     if cash_info.currency == 'USD':
                         available_cash = float(cash_info.available_cash)
                         frozen_cash = float(cash_info.frozen_cash)
-                        return available_cash + frozen_cash
+                        return (available_cash, frozen_cash)
         except Exception as e:
             self.logger.error(f"Error getting cash balance: {str(e)}")
             
-        return 0.0
+        return (0.0, 0.0)
         
     def get_stock_position(self):
         """Get the current stock position"""
@@ -290,7 +291,7 @@ class StockGridTrader:
         
         # Get available balances and positions
         try:
-            buying_power = self.get_cash_balance()         
+            buying_power, _ = self.get_cash_balance()         
             stock_position = self.get_stock_position()
             
             buy_orders_placed = 0
