@@ -135,8 +135,11 @@ class StockGridTrader:
         try:
             account_balance = self.trade_ctx.account_balance()
             for balance in account_balance:
-                if balance.currency == 'USD':
-                    return float(balance.balance)
+                for cash_info in balance.cash_infos:
+                    if cash_info.currency == 'USD':
+                        available_cash = float(cash_info.available_cash)
+                        frozen_cash = float(cash_info.frozen_cash)
+                        return available_cash + frozen_cash
         except Exception as e:
             self.logger.error(f"Error getting cash balance: {str(e)}")
             
@@ -146,11 +149,11 @@ class StockGridTrader:
         """Get the current stock position"""
         try:
             positions = self.trade_ctx.stock_positions()
-            stock_position = 0
             for channel in positions.channels:
                 for position in channel.positions:
                     if position.symbol == self.symbol:
                         stock_position = float(position.quantity)
+                        available_position = float(position.available_quantity)
                         return stock_position
         except Exception as e:
             self.logger.error(f"Error getting stock position: {str(e)}")
