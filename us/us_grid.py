@@ -395,6 +395,10 @@ class StockGridTrader:
             # If price has moved out of range plus buffer, adjust the grid
             if current_price - self.grid_gap * 2 > high_price or current_price + self.grid_gap * 2 < low_price:
                 return True
+        else:
+            # If no active orders, adjust grid every 5 minutes
+            if current_time - self.last_adjustment_time >= 300:
+                return True
             
         return False
 
@@ -405,17 +409,21 @@ class StockGridTrader:
             active_orders = [order for order in orders if order.status in [OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED]]
             
             if not active_orders:
-                self.logger.info("No active orders")
-                send_telegram_message("No active orders")
+                msg = "No active orders"
+                self.logger.info(msg)
+                send_telegram_message(msg)
                 return
                 
             sorted_orders = sorted(active_orders, key=lambda x: x.submitted_price, reverse=True)
+            messages = []
             
             for order in sorted_orders:
                 side = "BUY" if order.side == OrderSide.BUY else "SELL"
-                msg = f"Order: {side} ${order.submitted_price:.2f}, Quantity: {order.submitted_quantity}"
-                self.logger.info(msg)
-                send_telegram_message(msg)
+                messages.append(f"Order: {side} ${order.submitted_price:.2f}, Quantity: {order.submitted_quantity}")
+            
+            full_message = "\n".join(messages)
+            self.logger.info(full_message)
+            send_telegram_message(full_message)
         except Exception as e:
             self.logger.error(f"Error showing orders: {str(e)}")
 
