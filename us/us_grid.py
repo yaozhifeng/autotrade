@@ -99,6 +99,12 @@ class StockGridTrader:
         else:
             # Default to US market
             return Market.US
+        
+    def get_fee(self, share=1):
+        """Calculate the fee for a trade, the US fee is calculated by share instead of amount"""
+        commission_fee = max(0.99, share * 0.0049)
+        platform_fee = max(1.0, 0.005 * share)
+        return commission_fee + platform_fee
 
     def is_market_open(self):
         """Check if the stock market is currently open"""
@@ -176,7 +182,7 @@ class StockGridTrader:
         avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] if self.daily_stats['sell_orders'] > 0 else 0
 
         gross_margin = (avg_sell_price - avg_buy_price) * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
-        fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * float(os.getenv('FEE_RATE', 0.001))
+        fee = self.get_fee(self.quantity * (self.daily_stats['sell_orders'] + self.daily_stats['buy_orders']))
         net_profit = gross_margin - fee
 
         briefing_msg = (
@@ -252,14 +258,14 @@ class StockGridTrader:
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
             self.grid_gap = self.current_grid[1] - self.current_grid[0]
 
-            profit_per_grid_percent = (self.initial_grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))*2) * 100
+            profit_per_grid_percent = self.grid_gap - self.get_fee(self.quantity*2)
 
             msg = f"Grid parameters adjusted:\n"
             msg += f"Current price: {current_price:.2f} USD\n"
             msg += f"New grid range: {lower_price:.2f} - {upper_price:.2f} USD\n"
             msg += f"Grid levels: {self.grid_levels}\n"
             msg += f"Grid gap: {self.grid_gap:.2f} USD\n"
-            msg += f"Profit per grid: {profit_per_grid_percent:.2f}%"
+            msg += f"Profit per grid: {profit_per_grid_percent:.2f} USD\n"
             self.logger.info(msg)
             send_telegram_message(msg)
             
