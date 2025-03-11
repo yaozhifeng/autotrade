@@ -256,9 +256,9 @@ class StockGridTrader:
             
             # Calculate new grid prices
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
-            self.grid_gap = self.current_grid[1] - self.current_grid[0]
+            self.grid_gap = (self.current_grid[1] - self.current_grid[0]) * self.quantity
 
-            profit_per_grid_percent = self.grid_gap - self.get_fee(self.quantity*2)
+            profit_per_grid_percent = self.grid_gap - self.get_fee(self.quantity)*2
 
             msg = f"Grid parameters adjusted:\n"
             msg += f"Current price: {current_price:.2f} USD\n"
