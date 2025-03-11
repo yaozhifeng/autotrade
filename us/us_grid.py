@@ -401,6 +401,9 @@ class StockGridTrader:
                 
                 if current_price - self.grid_gap * 2 > high_price or current_price + self.grid_gap * 2 < low_price:
                     return True
+            else:
+                if time.time() - self.last_adjustment_time >= 600:  # 10 minutes
+                    return True
         except Exception as e:
             self.logger.error(f"Error checking orders: {str(e)}")
             
@@ -488,6 +491,13 @@ class StockGridTrader:
                 try:
                     for order_id, order_info in list(self.orders.items()):
                         order_detail = self.trade_ctx.order_detail(order_id=order_id)
+                        
+                        if order_detail and order_detail.status == OrderStatus.Expired:
+                            self.logger.info(f"Order expired: {order_info['side']} {order_info['price']:.2f} USD")
+                            send_telegram_message(f"Order expired: {order_info['side']} {order_info['price']:.2f} USD")
+                            self.orders.pop(order_id)
+                            continue
+
                         if order_detail and order_detail.status == OrderStatus.Filled:
                             self.logger.info(f"Order filled: {order_info['side']} {order_info['price']:.2f} USD")
                             send_telegram_message(f"Order filled: {order_info['side']} {order_info['price']:.2f} USD")
