@@ -516,7 +516,7 @@ class StockGridTrader:
                                         symbol=self.symbol,
                                         order_type=OrderType.LO,
                                         side=OrderSide.Buy,
-                                        submitted_price=Decimal(str(new_price)),
+                                        submitted_price=Decimal(f"{new_price:.2f}"),
                                         submitted_quantity=self.quantity,
                                         time_in_force=TimeInForceType.Day
                                     )
@@ -537,7 +537,7 @@ class StockGridTrader:
                                         symbol=self.symbol,
                                         order_type=OrderType.LO,
                                         side=OrderSide.Sell,
-                                        submitted_price=Decimal(str(new_price)),
+                                        submitted_price=Decimal(f"{new_price:.2f}"),
                                         submitted_quantity=self.quantity,
                                         time_in_force=TimeInForceType.Day
                                     )
