@@ -11,7 +11,7 @@ from decimal import Decimal
 
 # Longport import
 from longport.openapi import TradeContext, Config, OrderSide, OrderType, TimeInForceType, Market, OrderStatus
-from longport.openapi import QuoteContext
+from longport.openapi import QuoteContext, TradeSession
 
 # Load environment variables from .env file
 load_dotenv()
@@ -107,7 +107,13 @@ class StockGridTrader:
             for session in trading_session:
                 if session.market == self.market:
                     #should further check for market time from session.trade_sessions
-                    return True
+                    for session_info in session.trade_sessions:
+                        if session_info.trade_session == TradeSession.Normal:
+                            start_time = session_info.begin_time
+                            end_time = session_info.end_time
+                            current_time = datetime.now(timezone('US/Eastern')).time()
+                            if start_time <= current_time <= end_time:
+                                return True
             return False
         except Exception as e:
             self.logger.error(f"Error checking market status: {str(e)}")
@@ -491,7 +497,7 @@ class StockGridTrader:
                 try:
                     for order_id, order_info in list(self.orders.items()):
                         order_detail = self.trade_ctx.order_detail(order_id=order_id)
-                        
+
                         if order_detail and order_detail.status == OrderStatus.Expired:
                             self.logger.info(f"Order expired: {order_info['side']} {order_info['price']:.2f} USD")
                             send_telegram_message(f"Order expired: {order_info['side']} {order_info['price']:.2f} USD")
