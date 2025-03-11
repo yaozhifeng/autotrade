@@ -10,7 +10,7 @@ import os
 from decimal import Decimal
 
 # Longport import
-from longport.openapi import TradeContext, Config, OrderSide, OrderType, TimeInForceType, Market
+from longport.openapi import TradeContext, Config, OrderSide, OrderType, TimeInForceType, Market, OrderStatus
 from longport.openapi import QuoteContext
 
 # Load environment variables from .env file
@@ -130,17 +130,17 @@ class StockGridTrader:
         total_stock_value = self.get_stock_position() * self.get_current_price()
         return available_cash + frozen_cash + total_stock_value
         
-    def get_cash_balance(self):
+    def get_cash_balance(self, currency='USD'):
         """Get the cash balance of the account"""
         """Return available cash and frozen cash"""
         try:
             account_balance = self.trade_ctx.account_balance()
             for balance in account_balance:
                 for cash_info in balance.cash_infos:
-                    if cash_info.currency == 'USD':
-                        available_cash = float(cash_info.available_cash)
+                    if cash_info.currency == currency:
+                        withdraw_cash = float(cash_info.withdraw_cash)
                         frozen_cash = float(cash_info.frozen_cash)
-                        return (available_cash, frozen_cash)
+                        return (withdraw_cash, frozen_cash)
         except Exception as e:
             self.logger.error(f"Error getting cash balance: {str(e)}")
             
@@ -263,15 +263,33 @@ class StockGridTrader:
             self.logger.error(f"Failed to adjust grid parameters: {str(e)}")
             return False
 
+    def get_active_orders(self):
+        """Get all active orders"""
+        try:
+            active_status = [OrderStatus.New, OrderStatus.PartialFilled, OrderStatus.NotReported]
+            orders = self.trade_ctx.today_orders(symbol=self.symbol, status=active_status)
+            return orders
+        except Exception as e:
+            self.logger.error(f"Error getting active orders: {str(e)}")
+            return []
+        
+    def get_filled_orders(self):
+        """Get all filled orders"""
+        try:
+            orders = self.trade_ctx.today_orders(symbol=self.symbol, status=[OrderStatus.Filled])
+            return orders
+        except Exception as e:
+            self.logger.error(f"Error getting filled orders: {str(e)}")
+            return []
+
     def cancel_all_orders(self):
         """Cancel all open orders"""
         try:
             # Get all open orders
-            orders = self.trade_ctx.today_orders()
+            orders = self.get_active_orders()
             
             for order in orders:
-                if order.symbol == self.symbol and order.status in ["NEW", "PARTIALLY_FILLED"]:
-                    self.trade_ctx.cancel_order(order.order_id)
+                self.trade_ctx.cancel_order(order.order_id)
             
             self.orders.clear()
             self.logger.info("All orders have been cancelled")
@@ -308,7 +326,7 @@ class StockGridTrader:
                                 symbol=self.symbol,
                                 order_type=OrderType.LO,
                                 side=OrderSide.Buy,
-                                submitted_price=Decimal(str(price)),
+                                submitted_price=Decimal(f"{price:.2f}"),
                                 submitted_quantity=self.quantity,
                                 time_in_force=TimeInForceType.Day
                             )
@@ -332,7 +350,7 @@ class StockGridTrader:
                                 symbol=self.symbol,
                                 order_type=OrderType.LO,
                                 side=OrderSide.Sell,
-                                submitted_price=Decimal(str(price)),
+                                submitted_price=Decimal(f"{price:.2f}"),
                                 submitted_quantity=self.quantity,
                                 time_in_force=TimeInForceType.Day
                             )
@@ -375,12 +393,11 @@ class StockGridTrader:
         # Check price changes
         try:
             current_price = self.get_current_price()
-            orders = self.trade_ctx.today_orders()
-            active_orders = [order for order in orders if order.symbol == self.symbol and order.status in ["NEW", "PARTIALLY_FILLED"]]
+            active_orders = self.get_active_orders()
             
             if active_orders:
-                high_price = max([float(order.submitted_price) for order in active_orders])
-                low_price = min([float(order.submitted_price) for order in active_orders])
+                high_price = max([float(order.price) for order in active_orders])
+                low_price = min([float(order.price) for order in active_orders])
                 
                 if current_price - self.grid_gap * 2 > high_price or current_price + self.grid_gap * 2 < low_price:
                     return True
@@ -392,14 +409,13 @@ class StockGridTrader:
     def show_orders(self):
         """Display current orders"""
         try:
-            orders = self.trade_ctx.today_orders()
-            active_orders = [order for order in orders if order.symbol == self.symbol and order.status in ["NEW", "PARTIALLY_FILLED"]]
-            sorted_orders = sorted(active_orders, key=lambda x: float(x.submitted_price), reverse=True)
+            active_orders = self.get_active_orders()
+            sorted_orders = sorted(active_orders, key=lambda x: float(x.price), reverse=True)
             
             for order in sorted_orders:
                 side = "BUY" if order.side == OrderSide.Buy else "SELL"
-                self.logger.info(f"Order: {side} {float(order.submitted_price):.2f} USD, Quantity: {order.quantity}")
-                send_telegram_message(f"Order: {side} {float(order.submitted_price):.2f} USD, Quantity: {order.quantity}")
+                self.logger.info(f"Order: {side} {float(order.price):.2f} USD, Quantity: {order.quantity}")
+                send_telegram_message(f"Order: {side} {float(order.price):.2f} USD, Quantity: {order.quantity}")
                 
         except Exception as e:
             self.logger.error(f"Error showing orders: {str(e)}")
@@ -470,73 +486,70 @@ class StockGridTrader:
                 
                 # Check order status
                 try:
-                    orders = self.trade_ctx.today_orders()
-                    for order in orders:
-                        if order.symbol == self.symbol and order.order_id in self.orders:
-                            order_info = self.orders[order.order_id]
+                    for order_id, order_info in list(self.orders.items()):
+                        order_detail = self.trade_ctx.order_detail(order_id=order_id)
+                        if order_detail and order_detail.status == OrderStatus.Filled:
+                            self.logger.info(f"Order filled: {order_info['side']} {order_info['price']:.2f} USD")
+                            send_telegram_message(f"Order filled: {order_info['side']} {order_info['price']:.2f} USD")
+                            self.orders.pop(order_id)
+                            self.last_trade_time = time.time()  # Update the last trade time
                             
-                            if order.status == "FILLED":
-                                self.logger.info(f"Order filled: {order_info['side']} {order_info['price']:.2f} USD")
-                                send_telegram_message(f"Order filled: {order_info['side']} {order_info['price']:.2f} USD")
-                                self.orders.pop(order.order_id)
-                                self.last_trade_time = time.time()  # Update the last trade time
+                            # Update daily stats
+                            if order_info['side'] == 'BUY':
+                                self.daily_stats['buy_orders'] += 1
+                                self.daily_stats['total_buy_price'] += order_info['price'] * self.quantity
+                            else:
+                                self.daily_stats['sell_orders'] += 1
+                                self.daily_stats['total_sell_price'] += order_info['price'] * self.quantity
+                            
+                            # Place reverse order
+                            new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
+                            new_price = order_info['price'] - self.grid_gap if new_side == 'BUY' else order_info['price'] + self.grid_gap
+                            
+                            # Check balance before placing reverse order
+                            if new_side == 'BUY':
+                                available_cash, _ = self.get_cash_balance()
+                                required_cash = self.quantity * new_price
                                 
-                                # Update daily stats
-                                if order_info['side'] == 'BUY':
-                                    self.daily_stats['buy_orders'] += 1
-                                    self.daily_stats['total_buy_price'] += order_info['price'] * self.quantity
-                                else:
-                                    self.daily_stats['sell_orders'] += 1
-                                    self.daily_stats['total_sell_price'] += order_info['price'] * self.quantity
-                                
-                                # Place reverse order
-                                new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
-                                new_price = order_info['price'] - self.grid_gap if new_side == 'BUY' else order_info['price'] + self.grid_gap
-                                
-                                # Check balance before placing reverse order
-                                if new_side == 'BUY':
-                                    available_cash, _ = self.get_cash_balance()
-                                    required_cash = self.quantity * new_price
+                                if available_cash >= required_cash:
+                                    new_order = self.trade_ctx.submit_order(
+                                        symbol=self.symbol,
+                                        order_type=OrderType.LO,
+                                        side=OrderSide.Buy,
+                                        submitted_price=Decimal(str(new_price)),
+                                        submitted_quantity=self.quantity,
+                                        time_in_force=TimeInForceType.Day
+                                    )
                                     
-                                    if available_cash >= required_cash:
-                                        new_order = self.trade_ctx.submit_order(
-                                            symbol=self.symbol,
-                                            order_type=OrderType.LO,
-                                            side=OrderSide.Buy,
-                                            submitted_price=Decimal(str(new_price)),
-                                            submitted_quantity=self.quantity,
-                                            time_in_force=TimeInForceType.Day
-                                        )
-                                        
-                                        self.orders[new_order.order_id] = {
-                                            'price': new_price,
-                                            'side': new_side,
-                                            'status': 'OPEN'
-                                        }
-                                        self.logger.info(f"New order created: {new_side} {new_price:.2f} USD")
-                                    else:
-                                        self.logger.warning(f"Insufficient cash to place buy order at {new_price:.2f} USD")
+                                    self.orders[new_order.order_id] = {
+                                        'price': new_price,
+                                        'side': new_side,
+                                        'status': 'OPEN'
+                                    }
+                                    self.logger.info(f"New order created: {new_side} {new_price:.2f} USD")
                                 else:
-                                    stock_position = self.get_stock_position()
-                                            
-                                    if stock_position >= self.quantity:
-                                        new_order = self.trade_ctx.submit_order(
-                                            symbol=self.symbol,
-                                            order_type=OrderType.LO,
-                                            side=OrderSide.Sell,
-                                            submitted_price=Decimal(str(new_price)),
-                                            submitted_quantity=self.quantity,
-                                            time_in_force=TimeInForceType.Day
-                                        )
+                                    self.logger.warning(f"Insufficient cash to place buy order at {new_price:.2f} USD")
+                            else:
+                                stock_position = self.get_stock_position()
                                         
-                                        self.orders[new_order.order_id] = {
-                                            'price': new_price,
-                                            'side': new_side,
-                                            'status': 'OPEN'
-                                        }
-                                        self.logger.info(f"New order created: {new_side} {new_price:.2f} USD")
-                                    else:
-                                        self.logger.warning(f"Insufficient stock position to place sell order at {new_price:.2f} USD")
+                                if stock_position >= self.quantity:
+                                    new_order = self.trade_ctx.submit_order(
+                                        symbol=self.symbol,
+                                        order_type=OrderType.LO,
+                                        side=OrderSide.Sell,
+                                        submitted_price=Decimal(str(new_price)),
+                                        submitted_quantity=self.quantity,
+                                        time_in_force=TimeInForceType.Day
+                                    )
+                                    
+                                    self.orders[new_order.order_id] = {
+                                        'price': new_price,
+                                        'side': new_side,
+                                        'status': 'OPEN'
+                                    }
+                                    self.logger.info(f"New order created: {new_side} {new_price:.2f} USD")
+                                else:
+                                    self.logger.warning(f"Insufficient stock position to place sell order at {new_price:.2f} USD")
                                 
                 except Exception as e:
                     self.logger.error(f"Failed to check order status: {str(e)}")
