@@ -85,6 +85,7 @@ class StockGridTrader:
             'final_price': 0.0
         }
         self.last_briefing_time = time.time()
+        self.briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
         
         # Market session
         self.market = self.get_market_from_symbol()
@@ -114,7 +115,7 @@ class StockGridTrader:
                 if session.market == self.market:
                     #should further check for market time from session.trade_sessions
                     for session_info in session.trade_sessions:
-                        if session_info.trade_session == TradeSession.Normal:
+                        if session_info.trade_session in [TradeSession.Normal, TradeSession.Pre, TradeSession.Post]:
                             start_time = session_info.begin_time
                             end_time = session_info.end_time
                             current_time = datetime.now(timezone('US/Eastern')).time()
@@ -590,8 +591,7 @@ class StockGridTrader:
                 self.answer_telegram()
 
                 # Check if daily briefing is needed
-                briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
-                if time.time() - self.last_briefing_time >= briefing_interval:
+                if time.time() - self.last_briefing_time >= self.briefing_interval:
                     self.send_daily_briefing()
                     
                 time.sleep(10)
