@@ -498,6 +498,10 @@ class StockGridTrader:
             try:
                 # Skip processing if market is closed
                 if not self.is_market_open():
+                    # Check if daily briefing is needed
+                    if time.time() - self.last_briefing_time >= self.briefing_interval:
+                        self.send_daily_briefing()
+                     
                     time.sleep(60)  # Check every minute when market is closed
                     continue
                 
@@ -589,11 +593,7 @@ class StockGridTrader:
                 
                 # Answer Telegram messages
                 self.answer_telegram()
-
-                # Check if daily briefing is needed
-                if time.time() - self.last_briefing_time >= self.briefing_interval:
-                    self.send_daily_briefing()
-                    
+                   
                 time.sleep(10)
             except KeyboardInterrupt:
                 self.logger.info("Ctrl+C detected, exiting...")
