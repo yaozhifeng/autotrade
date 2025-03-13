@@ -349,15 +349,6 @@ class DynamicGridTrader:
         # 检查时间间隔
         if current_time - self.last_adjustment_time < self.min_adjustment_interval:
             return False
-        
-        # Check if no trades have occurred in the last 24 hours
-        max_silent_hour = int(os.getenv('MAX_SILENT_HOUR', 24))
-        if self.last_trade_time and (time.time() - self.last_trade_time) > max_silent_hour*60*60:
-            self.logger.warning(f"No trades have occurred in the last {max_silent_hour} hours")
-            send_telegram_message(f"No trades have occurred in the last {max_silent_hour} hours")
-            self.last_trade_time = time.time()  # Reset the last trade time
-            return True
-
 
         # 检查价格变化,如果超过当前订单一个网格，就调整网格
         open_orders = self.client.get_open_orders(symbol=self.symbol)
