@@ -226,7 +226,7 @@ class DynamicGridTrader:
                 self.current_grid.append(current_price + self.grid_gap * (i+1))
                 self.current_grid.append(current_price - self.grid_gap * (i+1))
             
-            profit_per_grid_percent = grid_gain - float(os.getenv('FEE_RATE', 0.001))*2  # 每格利润（扣除手续费）
+            profit_per_grid_percent = (grid_gain - float(os.getenv('FEE_RATE', 0.001))*2) * 100  # 每格利润（扣除手续费）
 
             msg = f"网格参数已调整:\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
