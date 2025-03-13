@@ -115,7 +115,7 @@ class StockGridTrader:
                 if session.market == self.market:
                     #should further check for market time from session.trade_sessions
                     for session_info in session.trade_sessions:
-                        if session_info.trade_session in [TradeSession.Normal, TradeSession.Pre, TradeSession.Post]:
+                        if session_info.trade_session in [TradeSession.Normal, TradeSession.Post]:
                             start_time = session_info.begin_time
                             end_time = session_info.end_time
                             current_time = datetime.now(timezone('US/Eastern')).time()
