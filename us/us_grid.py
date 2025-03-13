@@ -179,17 +179,17 @@ class StockGridTrader:
         self.daily_stats['final_balance'] = self.get_total_balance()
         self.daily_stats['final_price'] = self.get_current_price()
 
-        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] if self.daily_stats['buy_orders'] > 0 else 0
-        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] if self.daily_stats['sell_orders'] > 0 else 0
+        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] / self.quantity if self.daily_stats['buy_orders'] > 0 else 0
+        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] / self.quantity if self.daily_stats['sell_orders'] > 0 else 0
 
-        gross_margin = (avg_sell_price - avg_buy_price) * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
+        gross_margin = (avg_sell_price - avg_buy_price) * self.quantity * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
         fee = self.get_fee(self.quantity) * (self.daily_stats['sell_orders'] + self.daily_stats['buy_orders'])
         net_profit = gross_margin - fee
 
         briefing_msg = (
             f"Daily Summary:\n"
             f"Net Profit: {net_profit:.2f} USD\n"
-            f"Gross Profit: {gross_margin:.2f} USD\n"
+            f"Gross Margin: {gross_margin:.2f} USD\n"
             f"Fees: {fee:.2f} USD\n"
             f"Buy Orders: {self.daily_stats['buy_orders']}\n"
             f"Sell Orders: {self.daily_stats['sell_orders']}\n"
@@ -200,7 +200,7 @@ class StockGridTrader:
             f"Current position: {self.get_stock_position()} shares\n"
             f"Initial Price: {self.daily_stats['initial_price']:.2f} USD\n"
             f"Final Price: {self.daily_stats['final_price']:.2f} USD\n"
-            f"Period: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"Period: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M')} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         )
         send_telegram_message(briefing_msg)
         self.logger.info(briefing_msg)
