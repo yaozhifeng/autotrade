@@ -106,8 +106,8 @@ class DynamicGridTrader:
         self.daily_stats['final_balance'] = self.get_total_balance()
         self.daily_stats['final_price'] = self.get_current_price()
 
-        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] if self.daily_stats['buy_orders'] > 0 else 0
-        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] if self.daily_stats['sell_orders'] > 0 else 0
+        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] / self.quantity if self.daily_stats['buy_orders'] > 0 else 0
+        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] / self.quantity if self.daily_stats['sell_orders'] > 0 else 0
 
         gross_margin = (avg_sell_price - avg_buy_price) * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
         fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * float(os.getenv('FEE_RATE', 0.001))
