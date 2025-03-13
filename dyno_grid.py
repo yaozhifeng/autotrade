@@ -115,9 +115,9 @@ class DynamicGridTrader:
 
         briefing_msg = (
             f"每日简报:\n"
+            f"利润: {net_profit:.2f} USDT\n"
             f"毛利: {gross_margin:.2f} USDT\n"
             f"手续费: {fee:.2f} USDT\n"
-            f"利润: {net_profit:.2f} USDT\n"
             f"买单数量: {self.daily_stats['buy_orders']}\n"
             f"卖单数量: {self.daily_stats['sell_orders']}\n"
             f"平均买入价格: {avg_buy_price:.2f} USDT\n"
@@ -131,6 +131,13 @@ class DynamicGridTrader:
         send_telegram_message(briefing_msg)
         self.logger.info(briefing_msg)
 
+        # 根据上一周期买卖次数，计算下一周期的网格宽度调整系数
+        adjustment_factor = 0.0
+        if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < 10:
+            adjustment_factor = 0.8
+        elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > 50:
+            adjustment_factor = 1.2
+
         # 重置每日统计数据
         self.daily_stats = {
             'buy_orders': 0,
@@ -143,6 +150,8 @@ class DynamicGridTrader:
             'final_price': 0.0
         }
         self.last_briefing_time = time.time()
+
+        return adjustment_factor
 
 
     def answer_telegram(self):
@@ -202,25 +211,17 @@ class DynamicGridTrader:
         trend_strength = (ema_short - ema_long) / ema_long
         return trend_strength.iloc[-1]
 
-    def adjust_grid_parameters(self):
+    def adjust_grid_parameters(self, adjust_factor=1.0):
         """调整网格参数"""
         try:
-            # 获取市场数据
-            # df = self.get_market_data()
-            # current_price = float(df['close'].iloc[-1])
-            # volatility = self.calculate_volatility(df)
-            # trend = self.calculate_trend(df)
-
             # 使用当前价格作为市场数据, 忽略波动率和趋势
             current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
-            volatility = 0
-            trend = 0
             
             # 根据波动率调整网格宽度
-            grid_width = self.initial_grid_width * (1 + volatility)
+            grid_width = self.initial_grid_width * adjust_factor
             
             # 根据趋势调整网格中心
-            grid_center = current_price * (1 + trend * 0.1)
+            grid_center = current_price
             
             # 计算新的网格范围
             grid_range = current_price * grid_width
@@ -231,7 +232,7 @@ class DynamicGridTrader:
             self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
             self.grid_gap = self.current_grid[1] - self.current_grid[0]
 
-            profit_per_grid_percent = (self.initial_grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))*2) * 100
+            profit_per_grid_percent = (grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))*2) * 100
 
             msg = f"网格参数已调整:\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
@@ -501,7 +502,13 @@ class DynamicGridTrader:
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if time.time() - self.last_briefing_time >= briefing_interval:
-                    self.send_daily_briefing()
+                    adjust_factor = self.send_daily_briefing()
+                    if adjust_factor != 0:
+                        self.cancel_all_orders()
+                        self.adjust_grid_parameters()
+                        sell_only = self.evaluate_risk()
+                        self.place_grid_orders(sell_only=sell_only)
+                        self.last_adjustment_time = time.time()
                     
                 time.sleep(10)
             except KeyboardInterrupt:
