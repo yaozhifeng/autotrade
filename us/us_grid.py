@@ -188,15 +188,16 @@ class StockGridTrader:
 
         briefing_msg = (
             f"Daily Summary:\n"
+            f"Net Profit: {net_profit:.2f} USD\n"
             f"Gross Profit: {gross_margin:.2f} USD\n"
             f"Fees: {fee:.2f} USD\n"
-            f"Net Profit: {net_profit:.2f} USD\n"
             f"Buy Orders: {self.daily_stats['buy_orders']}\n"
             f"Sell Orders: {self.daily_stats['sell_orders']}\n"
             f"Average Buy Price: {avg_buy_price:.2f} USD\n"
             f"Average Sell Price: {avg_sell_price:.2f} USD\n"
             f"Initial Balance: {self.daily_stats['initial_balance']:.2f} USD\n"
             f"Final Balance: {self.daily_stats['final_balance']:.2f} USD\n"
+            f"Current position: {self.get_stock_position()} shares\n"
             f"Initial Price: {self.daily_stats['initial_price']:.2f} USD\n"
             f"Final Price: {self.daily_stats['final_price']:.2f} USD\n"
             f"Period: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
