@@ -216,27 +216,21 @@ class DynamicGridTrader:
         try:
             # 使用当前价格作为市场数据, 忽略波动率和趋势
             current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+            self.current_grid = []
             
             # 根据波动率调整网格宽度
-            grid_width = self.initial_grid_width * adjust_factor
-            
-            # 根据趋势调整网格中心
-            grid_center = current_price
-            
-            # 计算新的网格范围
-            grid_range = current_price * grid_width
-            lower_price = grid_center - grid_range/2
-            upper_price = grid_center + grid_range/2
-            
-            # 计算新的网格价格
-            self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
-            self.grid_gap = self.current_grid[1] - self.current_grid[0]
+            grid_gain = float(os.getenv('GRID_GAIN', 0.005)) * adjust_factor  #  单网格利润, 默认 0.5%, 并按系数调整
+            self.grid_gap = grid_gain * current_price
 
-            profit_per_grid_percent = (grid_width/(self.grid_levels-1) - float(os.getenv('FEE_RATE', 0.001))*2) * 100
+            for i in range(self.grid_levels//2):
+                self.current_grid.append(current_price + self.grid_gap * (i+1))
+                self.current_grid.append(current_price - self.grid_gap * (i+1))
+            
+            profit_per_grid_percent = grid_gain - float(os.getenv('FEE_RATE', 0.001))*2  # 每格利润（扣除手续费）
 
             msg = f"网格参数已调整:\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
-            msg += f"新网格范围: {lower_price:.2f} - {upper_price:.2f} USDT\n"
+            msg += f"新网格范围: {min(self.current_grid):.2f} - {max(self.current_grid):.2f} USDT\n"
             msg += f"网格数量: {self.grid_levels}\n"
             msg += f"网格间隔: {self.grid_gap:.2f} USDT\n"
             msg += f"每格利润: {profit_per_grid_percent:.2f}%"
@@ -269,6 +263,9 @@ class DynamicGridTrader:
             self.adjust_grid_parameters()
         
         current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
+
+        buy_prices = [price for price in self.current_grid if price < current_price]
+        sell_prices = [price for price in self.current_grid if price > current_price]
         
         # Get available balances
         base_asset = self.symbol.replace('USDT', '')
@@ -277,60 +274,69 @@ class DynamicGridTrader:
         
         buy_orders_placed = 0
         sell_orders_placed = 0
-        
-        for price in self.current_grid:
+
+        # Place buy orders from highest price to lowest price
+        for price in sorted(buy_prices, reverse=True):
             try:
-                if price < current_price and not sell_only:
-                    # Check if there is enough USDT balance to place a buy order
-                    required_usdt = self.quantity * price
-                    if usdt_balance >= required_usdt:
-                        # Place buy order
-                        order = self.client.create_order(
-                            symbol=self.symbol,
-                            side=SIDE_BUY,
-                            type=ORDER_TYPE_LIMIT,
-                            timeInForce=TIME_IN_FORCE_GTC,
-                            quantity=self.quantity,
-                            price=f"{price:.2f}"
+                required_usdt = self.quantity * price
+                if usdt_balance >= required_usdt and not sell_only:
+                    # Place buy order
+                    order = self.client.create_order(
+                        symbol=self.symbol,
+                        side=SIDE_BUY,
+                        type=ORDER_TYPE_LIMIT,
+                        timeInForce=TIME_IN_FORCE_GTC,
+                        quantity=self.quantity,
+                        price=f"{price:.2f}"
                         )
-                        self.orders[order['orderId']] = {
-                            'price': price,
-                            'side': 'BUY',
-                            'status': 'OPEN'
+                    self.orders[order['orderId']] = {
+                        'price': price,
+                        'side': 'BUY',
+                        'status': 'OPEN'
                         }
-                        self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
-                        usdt_balance -= required_usdt  # Update available USDT balance
-                        buy_orders_placed += 1
-                    else:
-                        self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
-                elif price > current_price and not buy_only:
-                    # Check if there is enough base asset balance to place a sell order
-                    if base_asset_balance >= self.quantity:
-                        # Place sell order
-                        order = self.client.create_order(
-                            symbol=self.symbol,
-                            side=SIDE_SELL,
-                            type=ORDER_TYPE_LIMIT,
-                            timeInForce=TIME_IN_FORCE_GTC,
-                            quantity=self.quantity,
-                            price=f"{price:.2f}"
-                        )
-                        self.orders[order['orderId']] = {
-                            'price': price,
-                            'side': 'SELL',
-                            'status': 'OPEN'
-                        }
-                        self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
-                        base_asset_balance -= self.quantity  # Update available base asset balance
-                        sell_orders_placed += 1
-                    else:
-                        self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {price:.2f} USDT")
-                                
+                    self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
+                    usdt_balance -= required_usdt  # Update available USDT balance
+                    buy_orders_placed += 1
+                else:
+                    self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
             except Exception as e:
                 self.logger.error(f"下单失败: {str(e)}")
-        
-        self.logger.info(f"买单数量: {buy_orders_placed}, 卖单数量: {sell_orders_placed}")
-        send_telegram_message(f"买单数量: {buy_orders_placed}, 卖单数量: {sell_orders_placed}")
+        # Place sell orders from lowest price to highest price
+        for price in sorted(sell_prices):
+            try:
+                if base_asset_balance >= self.quantity and not buy_only:
+                    # Place sell order
+                    order = self.client.create_order(
+                        symbol=self.symbol,
+                        side=SIDE_SELL,
+                        type=ORDER_TYPE_LIMIT,
+                        timeInForce=TIME_IN_FORCE_GTC,
+                        quantity=self.quantity,
+                        price=f"{price:.2f}"
+                        )
+                    self.orders[order['orderId']] = {
+                        'price': price,
+                        'side': 'SELL',
+                        'status': 'OPEN'
+                        }
+                    self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
+                    base_asset_balance -= self.quantity  # Update available base asset balance
+                    sell_orders_placed += 1
+                else:
+                    self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {price:.2f} USDT")
+            except Exception as e:
+                self.logger.error(f"下单失败: {str(e)}")
+
+        lowest_price = min(order_info['price'] for order_info in self.orders.values())
+        highest_price = max(order_info['price'] for order_info in self.orders.values())
+
+        msg = f"网格订单已放置:\n"
+        msg += f"最低价格: {lowest_price:.2f} USDT\n"
+        msg += f"最高价格: {highest_price:.2f} USDT\n"
+        msg += f"买单数量: {buy_orders_placed}\n"
+        msg += f"卖单数量: {sell_orders_placed}"
+        self.logger.info(msg)
+        send_telegram_message(msg)
 
     def should_adjust_grid(self):
         """判断是否需要调整网格"""
