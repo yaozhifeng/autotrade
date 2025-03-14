@@ -298,7 +298,7 @@ class DynamicGridTrader:
                     usdt_balance -= required_usdt  # Update available USDT balance
                     buy_orders_placed += 1
                 else:
-                    self.logger.warning(f"Insufficient USDT balance to place buy order at {price:.2f} USDT")
+                    self.logger.warning(f"买单未放置 {price:.2f} USDT")
             except Exception as e:
                 self.logger.error(f"下单失败: {str(e)}")
         # Place sell orders from lowest price to highest price
@@ -323,7 +323,7 @@ class DynamicGridTrader:
                     base_asset_balance -= self.quantity  # Update available base asset balance
                     sell_orders_placed += 1
                 else:
-                    self.logger.warning(f"Insufficient {base_asset} balance to place sell order at {price:.2f} USDT")
+                    self.logger.warning(f"卖单未放置 {price:.2f} USDT")
             except Exception as e:
                 self.logger.error(f"下单失败: {str(e)}")
 
