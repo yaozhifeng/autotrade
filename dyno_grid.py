@@ -170,10 +170,13 @@ class DynamicGridTrader:
                         self.show_orders()
                     elif text == '/portfolio':
                         self.check_portfolio()
-                    elif text == '/adjust':
+                    elif text.startswith('/adjust'):
+                        factor = float(text.split(' ')[1]) if len(text.split(' ')) > 1 else 1.0
                         self.cancel_all_orders()
-                        self.current_grid = None
-                        self.last_adjustment_time = None
+                        self.adjust_grid_parameters(factor)
+                        sell_only = self.evaluate_risk()
+                        self.place_grid_orders(sell_only=sell_only)
+                        self.last_adjustment_time = time.time()
         except Exception as e:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
