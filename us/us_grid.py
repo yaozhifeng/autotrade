@@ -70,9 +70,6 @@ class StockGridTrader:
         self.last_adjustment_time = None
         self.last_trade_time = None  # Track the time of the last trade
         
-        # Set adjustment parameters
-        self.min_adjustment_interval = int(os.getenv('MIN_ADJUSTMENT_INTERVAL', 3600))  # Minimum adjustment interval (seconds)
-
         # Initialize daily statistics
         self.daily_stats = {
             'buy_orders': 0,
