@@ -552,7 +552,7 @@ class StockGridTrader:
                 # Answer Telegram messages
                 self.answer_telegram()
                    
-                time.sleep(10)
+                time.sleep(30)
             except KeyboardInterrupt:
                 self.logger.info("Ctrl+C detected, exiting...")
                 self.cancel_all_orders()
