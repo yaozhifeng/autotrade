@@ -30,7 +30,7 @@ def send_telegram_message(msg):
 
 class StockGridTrader:
     def __init__(self, app_key, app_secret, access_token, symbol='AAPL',
-                 grid_levels=10, initial_grid_width=0.02,
+                 grid_levels=10, grid_gain=0.01,
                  quantity_per_grid=1):
         """
         Initialize the dynamic grid trading bot for stocks
@@ -39,7 +39,7 @@ class StockGridTrader:
         :param access_token: Longbridge API access token
         :param symbol: Stock symbol
         :param grid_levels: Number of grid levels
-        :param initial_grid_width: Initial grid width (percentage)
+        :param grid_gain: gain per grid (percentage)
         :param quantity_per_grid: Quantity to trade per grid
         """
         # Initialize Longbridge API clients
@@ -48,8 +48,8 @@ class StockGridTrader:
         self.quote_ctx = QuoteContext(config)
         
         self.symbol = symbol
-        self.grid_levels = grid_levels
-        self.initial_grid_width = initial_grid_width
+        self.grid_levels = grid_levels       
+        self.grid_gain = grid_gain 
         self.quantity = quantity_per_grid
         self.last_update_id = None  # Last telegram update id
         
@@ -113,7 +113,6 @@ class StockGridTrader:
             trading_session = self.quote_ctx.trading_session()
             for session in trading_session:
                 if session.market == self.market:
-                    #should further check for market time from session.trade_sessions
                     for session_info in session.trade_sessions:
                         if session_info.trade_session in [TradeSession.Normal, TradeSession.Post]:
                             start_time = session_info.begin_time
@@ -197,7 +196,7 @@ class StockGridTrader:
             f"Average Sell Price: {avg_sell_price:.2f} USD\n"
             f"Initial Balance: {self.daily_stats['initial_balance']:.2f} USD\n"
             f"Final Balance: {self.daily_stats['final_balance']:.2f} USD\n"
-            f"Current position: {self.get_stock_position()} shares\n"
+            f"Current Position: {self.get_stock_position()} shares\n"
             f"Initial Price: {self.daily_stats['initial_price']:.2f} USD\n"
             f"Final Price: {self.daily_stats['final_price']:.2f} USD\n"
             f"Period: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M')} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
@@ -247,24 +246,19 @@ class StockGridTrader:
             # Use current price as market data
             current_price = self.get_current_price()
             
-            grid_width = self.initial_grid_width
-            
-            grid_center = current_price
-            
-            # Calculate new grid range
-            grid_range = current_price * grid_width
-            lower_price = grid_center - grid_range/2
-            upper_price = grid_center + grid_range/2
-            
-            # Calculate new grid prices
-            self.current_grid = np.linspace(lower_price, upper_price, self.grid_levels)
-            self.grid_gap = self.current_grid[1] - self.current_grid[0]
+            self.grid_gap = current_price * self.grid_gain
 
+            self.current_grid = []
+
+            for i in range(self.grid_levels//2):
+                self.current_grid.append(current_price + self.grid_gap * (i+1))
+                self.current_grid.append(current_price - self.grid_gap * (i+1))
+                        
             profit_per_grid_percent = self.grid_gap * self.quantity - self.get_fee(self.quantity)*2
 
             msg = f"Grid parameters adjusted:\n"
             msg += f"Current price: {current_price:.2f} USD\n"
-            msg += f"New grid range: {lower_price:.2f} - {upper_price:.2f} USD\n"
+            msg += f"New grid range: {min(self.current_grid):.2f} - {max(self.current_grid):.2f} USD\n"
             msg += f"Grid levels: {self.grid_levels}\n"
             msg += f"Quantity per grid: {self.quantity}\n"
             msg += f"Gap per grid: {self.grid_gap:.2f} USD\n"
@@ -321,6 +315,8 @@ class StockGridTrader:
             self.adjust_grid_parameters()
         
         current_price = self.get_current_price()
+        buy_prices = [price for price in self.current_grid if price < current_price]
+        sell_prices = [price for price in self.current_grid if price > current_price]
         
         # Get available balances and positions
         try:
@@ -330,93 +326,73 @@ class StockGridTrader:
             buy_orders_placed = 0
             sell_orders_placed = 0
             
-            for price in self.current_grid:
-                try:
-                    if price < current_price and not sell_only:
-                        # Check if there is enough cash to place a buy order
-                        required_cash = self.quantity * price
-                        if buying_power >= required_cash:
-                            # Place buy order
-                            order = self.trade_ctx.submit_order(
-                                symbol=self.symbol,
-                                order_type=OrderType.LO,
-                                side=OrderSide.Buy,
-                                submitted_price=Decimal(f"{price:.2f}"),
-                                submitted_quantity=self.quantity,
-                                time_in_force=TimeInForceType.Day
-                            )
-                            
-                            self.orders[order.order_id] = {
-                                'price': price,
-                                'side': 'BUY',
-                                'status': 'OPEN'
-                            }
-                            self.logger.info(f"Order placed: BUY {price:.2f} USD, Quantity: {self.quantity}")
-                            buying_power -= required_cash
-                            buy_orders_placed += 1
-                        else:
-                            self.logger.warning(f"Insufficient buying power to place buy order at {price:.2f} USD")
-                    
-                    elif price > current_price and not buy_only:
-                        # Check if there is enough stock to place a sell order
-                        if stock_position >= self.quantity:
-                            # Place sell order
-                            order = self.trade_ctx.submit_order(
-                                symbol=self.symbol,
-                                order_type=OrderType.LO,
-                                side=OrderSide.Sell,
-                                submitted_price=Decimal(f"{price:.2f}"),
-                                submitted_quantity=self.quantity,
-                                time_in_force=TimeInForceType.Day
-                            )
-                            
-                            self.orders[order.order_id] = {
-                                'price': price,
-                                'side': 'SELL',
-                                'status': 'OPEN'
-                            }
-                            self.logger.info(f"Order placed: SELL {price:.2f} USD, Quantity: {self.quantity}")
-                            stock_position -= self.quantity
-                            sell_orders_placed += 1
-                        else:
-                            self.logger.warning(f"Insufficient stock position to place sell order at {price:.2f} USD")
-                                
-                except Exception as e:
-                    self.logger.error(f"Failed to place order: {str(e)}")
+            # Place buy orders from highest price to lowest
+            for price in sorted(buy_prices, reverse=True):
+                if not sell_only:
+                    required_cash = self.quantity * price
+                    if buying_power >= required_cash:
+                        order = self.trade_ctx.submit_order(
+                            symbol=self.symbol,
+                            order_type=OrderType.LO,
+                            side=OrderSide.Buy,
+                            submitted_price=Decimal(f"{price:.2f}"),
+                            submitted_quantity=self.quantity,
+                            time_in_force=TimeInForceType.Day
+                        )
+                        
+                        self.orders[order.order_id] = {
+                            'price': price,
+                            'side': 'BUY',
+                            'status': 'OPEN'
+                        }
+                        self.logger.info(f"Order placed: BUY {price:.2f} USD, Quantity: {self.quantity}")
+                        buying_power -= required_cash
+                        buy_orders_placed += 1
+                    else:
+                        self.logger.warning(f"Insufficient buying power to place buy order at {price:.2f} USD")
+
+            # Place sell orders from lowest price to highest
+            for price in sorted(sell_prices):
+                if not buy_only:
+                    if stock_position >= self.quantity:
+                        order = self.trade_ctx.submit_order(
+                            symbol=self.symbol,
+                            order_type=OrderType.LO,
+                            side=OrderSide.Sell,
+                            submitted_price=Decimal(f"{price:.2f}"),
+                            submitted_quantity=self.quantity,
+                            time_in_force=TimeInForceType.Day
+                        )
+                        
+                        self.orders[order.order_id] = {
+                            'price': price,
+                            'side': 'SELL',
+                            'status': 'OPEN'
+                        }
+                        self.logger.info(f"Order placed: SELL {price:.2f} USD, Quantity: {self.quantity}")
+                        stock_position -= self.quantity
+                        sell_orders_placed += 1
+                    else:
+                        self.logger.warning(f"Insufficient stock position to place sell order at {price:.2f} USD")
             
             self.logger.info(f"Buy orders: {buy_orders_placed}, Sell orders: {sell_orders_placed}")
             send_telegram_message(f"Buy orders: {buy_orders_placed}, Sell orders: {sell_orders_placed}")
             
         except Exception as e:
-            self.logger.error(f"Error getting account information: {str(e)}")
+            self.logger.error(f"Error placing orders: {str(e)}")
 
     def should_adjust_grid(self):
         """Determine if the grid should be adjusted"""
-        if self.current_grid is None or self.last_adjustment_time is None:
-            return True
-            
-        current_time = time.time()
-        
         # Check if market is open
         if not self.is_market_open():
             return False
 
-        # Check time interval
-        if current_time - self.last_adjustment_time < self.min_adjustment_interval:
-            return False
-        
-        # Check price changes
-        try:
-            current_price = self.get_current_price()
-            active_orders = self.get_active_orders()
+        if self.current_grid is None or self.last_adjustment_time is None:
+            return True
             
-            if active_orders:
-                high_price = max([float(order.price) for order in active_orders])
-                low_price = min([float(order.price) for order in active_orders])
-                
-                if current_price - self.grid_gap * 2 > high_price or current_price + self.grid_gap * 2 < low_price:
-                    return True
-            else:
+        try:
+            active_orders = self.get_active_orders()            
+            if not active_orders:
                 if time.time() - self.last_adjustment_time >= 600:  # 10 minutes
                     return True
         except Exception as e:
@@ -615,8 +591,8 @@ def get_bot():
         'access_token': os.getenv('LB_ACCESS_TOKEN'),
         'symbol': os.getenv('TRADE_SYMBOL', 'AAPL.US'),  # Load trading symbol from environment variable, default AAPL.US
         'grid_levels': int(os.getenv('GRID_LEVELS', 10)),  # Load grid levels from environment variable, default 10
-        'initial_grid_width': float(os.getenv('INITIAL_GRID_WIDTH', 0.02)),  # Load initial grid width from environment variable, default 2%
-        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),  # Quantity to trade per grid
+        'grid_gain': float(os.getenv('GRID_GAIN', 0.01)),  # Load initial grid gain from environment variable, default 1%
+        'quantity_per_grid': int(os.getenv('QUANTITY_PER_GRID', 1)),  # Quantity to trade per grid
     }
     
     # Create and run the dynamic grid trading bot
