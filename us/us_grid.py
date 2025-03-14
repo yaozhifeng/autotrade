@@ -477,7 +477,6 @@ class StockGridTrader:
                         self.send_daily_briefing()
                      
                     time.sleep(60)  # Check every minute when market is closed
-                    continue
                 
                 # Check order status
                 try:
