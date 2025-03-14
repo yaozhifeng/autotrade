@@ -410,6 +410,12 @@ class DynamicGridTrader:
         """运行动态网格交易机器人"""
         self.logger.info("启动动态网格交易机器人...")
         self.logger.info(f"交易对: {self.symbol}")
+
+        # 初始化网格参数
+        self.adjust_grid_parameters()
+        sell_only = self.evaluate_risk()
+        self.place_grid_orders(sell_only=sell_only)
+        self.last_adjustment_time = time.time()
         
         while True:
             try:
