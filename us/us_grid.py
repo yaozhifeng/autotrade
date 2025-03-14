@@ -414,30 +414,17 @@ class StockGridTrader:
     def check_portfolio(self):
         """Check portfolio status"""
         try:
-            cash_info = self.trade_ctx.cash_info()
-            available_cash = float(cash_info.available_cash)
-            frozen_cash = float(cash_info.frozen_cash)
+            available_cash, frozen_cash = self.get_cash_balance()            
+            positions = self.get_stock_position()
+            total_balance = self.get_total_balance()
             
-            positions = self.trade_ctx.positions()
-            stock_position = 0
-            for position in positions:
-                if position.symbol == self.symbol:
-                    stock_position = float(position.quantity)
-                    break
-            
-            self.logger.info(f"Cash: {available_cash:.2f} USD (Available), {frozen_cash:.2f} USD (Frozen)")
-            send_telegram_message(f"Cash: {available_cash:.2f} USD (Available), {frozen_cash:.2f} USD (Frozen)")
-            self.logger.info(f"{self.symbol}: {stock_position} shares")
-            send_telegram_message(f"{self.symbol}: {stock_position} shares")
-
-            # Calculate total balance
-            total_balance = float(cash_info.total_cash)
-            current_price = self.get_current_price()
-            stock_value = stock_position * current_price
-            total_value = total_balance + stock_value
-            
-            self.logger.info(f"Total value: {total_value:.2f} USD")
-            send_telegram_message(f"Total value: {total_value:.2f} USD")
+            portfolio_msg = (
+                f"Cash: {available_cash:.2f} USD (Available), {frozen_cash:.2f} USD (Frozen)\n"
+                f"{self.symbol}: {positions} shares\n"
+                f"Total value: {total_balance:.2f} USD"
+            )
+            self.logger.info(portfolio_msg)
+            send_telegram_message(portfolio_msg)
             
         except Exception as e:
             self.logger.error(f"Error checking portfolio: {str(e)}")
