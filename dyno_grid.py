@@ -109,7 +109,7 @@ class DynamicGridTrader:
         avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] / self.quantity if self.daily_stats['buy_orders'] > 0 else 0
         avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] / self.quantity if self.daily_stats['sell_orders'] > 0 else 0
 
-        gross_margin = (avg_sell_price - avg_buy_price) * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
+        gross_margin = (avg_sell_price - avg_buy_price) * self.quantity * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
         fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * float(os.getenv('FEE_RATE', 0.001))
         net_profit = gross_margin - fee
 
