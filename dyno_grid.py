@@ -485,13 +485,13 @@ class DynamicGridTrader:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
 
                 # 检查是否需要调整网格
-                if self.should_adjust_grid():
-                    self.logger.info("开始调整网格...")
-                    self.cancel_all_orders()
-                    self.adjust_grid_parameters()
-                    sell_only = self.evaluate_risk()
-                    self.place_grid_orders(sell_only=sell_only)
-                    self.last_adjustment_time = time.time()
+                # if self.should_adjust_grid():
+                #     self.logger.info("开始调整网格...")
+                #     self.cancel_all_orders()
+                #     self.adjust_grid_parameters()
+                #     sell_only = self.evaluate_risk()
+                #     self.place_grid_orders(sell_only=sell_only)
+                #     self.last_adjustment_time = time.time()
                 
                 # 回答Telegram消息
                 self.answer_telegram()
