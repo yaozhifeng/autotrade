@@ -462,8 +462,6 @@ class StockGridTrader:
                     # Check if daily briefing is needed
                     if time.time() - self.last_briefing_time >= self.briefing_interval:
                         self.send_daily_briefing()
-                     
-                    time.sleep(60)  # Check every minute when market is closed
                 
                 # Check order status
                 try:
