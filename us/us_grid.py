@@ -107,6 +107,11 @@ class StockGridTrader:
     def is_market_open(self):
         """Check if the stock market is currently open"""
         try:
+            # Check if today is Saturday or Sunday
+            current_day = datetime.now(timezone('US/Eastern')).weekday()
+            if current_day >= 5:  # 5 is Saturday, 6 is Sunday
+                return False
+
             trading_session = self.quote_ctx.trading_session()
             for session in trading_session:
                 if session.market == self.market:
