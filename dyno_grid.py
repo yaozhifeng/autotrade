@@ -347,13 +347,13 @@ class DynamicGridTrader:
             return True
             
         current_time = time.time()
-        current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
         
         # 检查时间间隔
         if current_time - self.last_adjustment_time < self.min_adjustment_interval:
             return False
 
-        # 检查价格变化,如果超过当前订单一个网格，就调整网格
+        # 检查价格变化,如果超过当前订单2个网格，就调整网格
+        current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
         open_orders = self.client.get_open_orders(symbol=self.symbol)
         if len(open_orders) > 0:
             high_price = max([float(order['price']) for order in open_orders])
