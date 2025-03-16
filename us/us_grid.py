@@ -82,7 +82,7 @@ class StockGridTrader:
             'final_price': 0.0
         }
         self.last_briefing_time = time.time()
-        self.briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
+        self.briefing_sent = False
         
         # Market session
         self.market = self.get_market_from_symbol()
@@ -218,6 +218,7 @@ class StockGridTrader:
             'final_price': 0.0
         }
         self.last_briefing_time = time.time()
+        self.briefing_sent = True
 
     def answer_telegram(self):
         """Respond to Telegram messages"""
@@ -465,9 +466,11 @@ class StockGridTrader:
                 # Skip processing if market is closed
                 if not self.is_market_open():
                     # Check if daily briefing is needed
-                    if time.time() - self.last_briefing_time >= self.briefing_interval:
+                    if not self.briefing_sent:
                         self.send_daily_briefing()
-                
+                else:
+                    self.briefing_sent = False
+
                 # Check order status
                 try:
                     for order_id, order_info in list(self.orders.items()):
