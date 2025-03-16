@@ -132,10 +132,10 @@ class DynamicGridTrader:
         self.logger.info(briefing_msg)
 
         # 根据上一周期买卖次数，计算下一周期的网格宽度调整系数
-        adjustment_factor = 1.0
-        if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < 10:
+        adjustment_factor = 1
+        if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < 15:
             adjustment_factor = 0.8
-        elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > 50:
+        elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > 30:
             adjustment_factor = 1.2
 
         # 重置每日统计数据
@@ -231,7 +231,7 @@ class DynamicGridTrader:
             
             profit_per_grid_percent = (grid_gain - float(os.getenv('FEE_RATE', 0.001))*2) * 100  # 每格利润（扣除手续费）
 
-            msg = f"网格参数已调整:\n"
+            msg = f"调整网格(系数 {adjust_factor:.1f}):\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
             msg += f"新网格范围: {min(self.current_grid):.2f} - {max(self.current_grid):.2f} USDT\n"
             msg += f"网格数量: {self.grid_levels}\n"
@@ -509,7 +509,7 @@ class DynamicGridTrader:
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if time.time() - self.last_briefing_time >= briefing_interval:
                     adjust_factor = self.send_daily_briefing()
-                    if self.should_adjust_grid():
+                    if not adjust_factor == 1 or self.should_adjust_grid():
                         self.cancel_all_orders()
                         self.adjust_grid_parameters(adjust_factor)
                         sell_only = self.evaluate_risk()
