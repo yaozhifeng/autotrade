@@ -67,9 +67,6 @@ class DynamicGridTrader:
         self.last_adjustment_time = None
         self.last_trade_time = None  # Track the time of the last trade
         
-        # 设置调整参数
-        self.min_adjustment_interval = int(os.getenv('MIN_ADJUSTMENT_INTERVAL', 3600))  # 最小调整间隔（秒）
-
         # 初始化每日统计数据
         self.daily_stats = {
             'buy_orders': 0,
@@ -133,9 +130,12 @@ class DynamicGridTrader:
 
         # 根据上一周期买卖次数，计算下一周期的网格宽度调整系数
         adjustment_factor = 1
-        if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < 15:
+        buy_sell_threshold_low = int(os.getenv('BUY_SELL_THRESHOLD_LOW', 18))
+        buy_sell_threshold_high = int(os.getenv('BUY_SELL_THRESHOLD_HIGH', 36))
+
+        if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < buy_sell_threshold_low:
             adjustment_factor = 0.8
-        elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > 30:
+        elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > buy_sell_threshold_high:
             adjustment_factor = 1.2
 
         # 重置每日统计数据
@@ -345,13 +345,7 @@ class DynamicGridTrader:
         """判断是否需要调整网格"""
         if self.current_grid is None or self.last_adjustment_time is None:
             return True
-            
-        current_time = time.time()
-        
-        # 检查时间间隔
-        if current_time - self.last_adjustment_time < self.min_adjustment_interval:
-            return False
-
+                    
         # 检查价格变化,如果超过当前订单2个网格，就调整网格
         current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
         open_orders = self.client.get_open_orders(symbol=self.symbol)
