@@ -133,12 +133,17 @@ class DynamicGridTrader:
         buy_sell_threshold_low = int(os.getenv('BUY_SELL_THRESHOLD_LOW', 18))
         buy_sell_threshold_high = int(os.getenv('BUY_SELL_THRESHOLD_HIGH', 36))
 
+        adjustment_factor = self.adjustment_factor
         if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < buy_sell_threshold_low:
-            adjustment_factor = 0.8
+            if self.adjustment_factor == 1.0:
+                adjustment_factor = 0.8
+            elif self.adjustment_factor == 1.2:
+                adjustment_factor = 1.0
         elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > buy_sell_threshold_high:
-            adjustment_factor = 1.2
-        else:
-            adjustment_factor = 1.0
+            if self.adjustment_factor == 0.8:
+                adjustment_factor = 1.0
+            elif self.adjustment_factor == 1.0:
+                adjustment_factor = 1.2
 
         # 重置每日统计数据
         self.daily_stats = {
