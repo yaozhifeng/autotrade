@@ -49,6 +49,7 @@ class DynamicGridTrader:
         self.volatility_window = volatility_window
         self.trend_window = trend_window
         self.last_update_id = None #Last telegram update id
+        self.adjustment_factor = 1.0
         
         # 设置日志
         logging.basicConfig(
@@ -129,7 +130,6 @@ class DynamicGridTrader:
         self.logger.info(briefing_msg)
 
         # 根据上一周期买卖次数，计算下一周期的网格宽度调整系数
-        adjustment_factor = 1
         buy_sell_threshold_low = int(os.getenv('BUY_SELL_THRESHOLD_LOW', 18))
         buy_sell_threshold_high = int(os.getenv('BUY_SELL_THRESHOLD_HIGH', 36))
 
@@ -137,6 +137,8 @@ class DynamicGridTrader:
             adjustment_factor = 0.8
         elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > buy_sell_threshold_high:
             adjustment_factor = 1.2
+        else:
+            adjustment_factor = 1.0
 
         # 重置每日统计数据
         self.daily_stats = {
@@ -222,6 +224,7 @@ class DynamicGridTrader:
             self.current_grid = []
             
             # 根据波动率调整网格宽度
+            self.adjustment_factor = adjust_factor
             grid_gain = float(os.getenv('GRID_GAIN', 0.005)) * adjust_factor  #  单网格利润, 默认 0.5%, 并按系数调整
             self.grid_gap = grid_gain * current_price
 
@@ -503,7 +506,7 @@ class DynamicGridTrader:
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if time.time() - self.last_briefing_time >= briefing_interval:
                     adjust_factor = self.send_daily_briefing()
-                    if not adjust_factor == 1 or self.should_adjust_grid():
+                    if not adjust_factor == self.adjustment_factor or self.should_adjust_grid():
                         self.cancel_all_orders()
                         self.adjust_grid_parameters(adjust_factor)
                         sell_only = self.evaluate_risk()
