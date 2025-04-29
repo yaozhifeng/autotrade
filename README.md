@@ -1,4 +1,4 @@
-## Crypto Exchange Bot
+## Crypto Trading Bot
 
 cp sample.env .env
 
