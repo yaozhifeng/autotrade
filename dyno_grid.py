@@ -555,9 +555,9 @@ class DynamicGridTrader:
 
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
-                if time.time() - self.last_briefing_time >= briefing_interval:
+                if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval or self.should_adjust_grid()):
                     adjust_factor = self.send_daily_briefing()
-                    if self.enable_trading and (not adjust_factor == self.adjustment_factor or self.should_adjust_grid()):
+                    if (not adjust_factor == self.adjustment_factor or self.should_adjust_grid()):
                         self.cancel_all_orders()
                         self.adjust_grid_parameters(adjust_factor)
                         sell_only = self.evaluate_risk()
