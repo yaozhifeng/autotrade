@@ -28,8 +28,9 @@ def send_telegram_message(msg):
 class DynamicGridTrader:
     def __init__(self, api_key, api_secret, symbol='LTCUSDT',
                  grid_levels=10, initial_grid_width=0.1,
-                 quantity_per_grid=0.1, volatility_window=24,
-                 trend_window=12):
+                 quantity_per_grid=0.1,
+                 short_period=7,
+                 long_period=25):
         """
         初始化动态网格交易机器人
         :param api_key: 币安API密钥
@@ -38,18 +39,18 @@ class DynamicGridTrader:
         :param grid_levels: 网格数量
         :param initial_grid_width: 初始网格宽度（百分比）
         :param quantity_per_grid: 每个网格的交易数量
-        :param volatility_window: 波动率计算窗口（小时）
-        :param trend_window: 趋势计算窗口（小时）
         """
         self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET', 'False').lower() == 'true')
         self.symbol = symbol
         self.grid_levels = grid_levels
         self.initial_grid_width = initial_grid_width
         self.quantity = quantity_per_grid
-        self.volatility_window = volatility_window
-        self.trend_window = trend_window
         self.last_update_id = None #Last telegram update id
         self.adjustment_factor = 1.0
+        self.enable_trading = True
+        self.last_check_time = None
+        self.short_period = short_period
+        self.long_period = long_period
         
         # 设置日志
         logging.basicConfig(
@@ -188,14 +189,14 @@ class DynamicGridTrader:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
     def get_market_data(self):
-        """获取市场数据"""
+        """获取市场数据, 4小时K线"""
         end_time = datetime.now()
-        start_time = end_time - timedelta(hours=max(self.volatility_window, self.trend_window)*2)
+        start_time = end_time - timedelta(hours=self.long_period*4+1)
         
         # 获取K线数据
         klines = self.client.get_historical_klines(
             self.symbol,
-            Client.KLINE_INTERVAL_1HOUR,
+            Client.KLINE_INTERVAL_4HOUR,
             start_time.strftime("%Y-%m-%d %H:%M:%S"),
             end_time.strftime("%Y-%m-%d %H:%M:%S")
         )
@@ -206,20 +207,20 @@ class DynamicGridTrader:
         df['close'] = pd.to_numeric(df['close'])
         return df
 
-    def calculate_volatility(self, df):
-        """计算市场波动率"""
-        returns = np.log(df['close'] / df['close'].shift(1))
-        return returns.std() * np.sqrt(24)  # 年化波动率
-
     def calculate_trend(self, df):
         """计算市场趋势"""
         # 使用EMA指标判断趋势
-        ema_short = df['close'].ewm(span=self.trend_window, adjust=False).mean()
-        ema_long = df['close'].ewm(span=self.trend_window * 2, adjust=False).mean()
+        ema_short = df['close'].ewm(span=self.short_period, adjust=False).mean()
+        ema_long = df['close'].ewm(span=self.long_period, adjust=False).mean()
         
         # 计算趋势强度
         trend_strength = (ema_short - ema_long) / ema_long
         return trend_strength.iloc[-1]
+    
+    def get_market_trend(self):
+        """获取市场趋势"""
+        df = self.get_market_data()
+        return self.calculate_trend(df)
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
         """调整网格参数"""
@@ -411,6 +412,35 @@ class DynamicGridTrader:
 
         return sell_only
     
+    def close_position(self):
+        """平仓函数：保留2个网格的现货，其余全部卖掉"""
+        base_asset = self.symbol.replace('USDT', '')
+        base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+        keep_amount = self.quantity * 2  # 保留2个网格的现货
+        sell_amount = base_asset_balance - keep_amount
+        
+        if sell_amount <= 0:
+            msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})不超过2个网格({keep_amount:.6f})"
+            self.logger.info(msg)
+            send_telegram_message(msg)
+            return
+        
+        try:
+            # 市价单全部卖出多余部分
+            order = self.client.create_order(
+                symbol=self.symbol,
+                side=SIDE_SELL,
+                type=ORDER_TYPE_MARKET,
+                quantity=round(sell_amount, 6)  # 保留6位小数，防止精度问题
+            )
+            msg = f"已平仓，卖出 {sell_amount:.6f} {base_asset}，保留 {keep_amount:.6f} {base_asset}"
+            self.logger.info(msg)
+            send_telegram_message(msg)
+        except Exception as e:
+            msg = f"平仓失败: {str(e)}"
+            self.logger.error(msg)
+            send_telegram_message(msg)
+
     def run(self):
         """运行动态网格交易机器人"""
         self.logger.info("启动动态网格交易机器人...")
@@ -494,24 +524,33 @@ class DynamicGridTrader:
                             
                     except Exception as e:
                         self.logger.error(f"检查订单状态失败: {str(e)}")
-
-                # 检查是否需要调整网格
-                # if self.should_adjust_grid():
-                #     self.logger.info("开始调整网格...")
-                #     self.cancel_all_orders()
-                #     self.adjust_grid_parameters()
-                #     sell_only = self.evaluate_risk()
-                #     self.place_grid_orders(sell_only=sell_only)
-                #     self.last_adjustment_time = time.time()
                 
                 # 回答Telegram消息
                 self.answer_telegram()
+
+                # 每小时检查市场趋势，看是否需要终止交易并平仓
+                if self.last_check_time is None or time.time() - self.last_check_time >= 3600:
+                    self.last_check_time = time.time()
+                    market_trend = self.get_market_trend()
+                    if market_trend < 0:
+                        if self.enable_trading: # 如果市场趋势向下，则平仓
+                            self.enable_trading = False
+                            self.cancel_all_orders()
+                            self.close_position()
+                            self.logger.info("市场趋势向下，平仓")
+                    elif market_trend > 0: # 如果市场趋势向上，则恢复交易
+                        if not self.enable_trading:
+                            self.enable_trading = True
+                            self.logger.info("市场趋势向上，恢复交易")
+                            self.adjust_grid_parameters()
+                            self.place_grid_orders()
+                            self.last_adjustment_time = time.time()
 
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if time.time() - self.last_briefing_time >= briefing_interval:
                     adjust_factor = self.send_daily_briefing()
-                    if not adjust_factor == self.adjustment_factor or self.should_adjust_grid():
+                    if self.enable_trading and (not adjust_factor == self.adjustment_factor or self.should_adjust_grid()):
                         self.cancel_all_orders()
                         self.adjust_grid_parameters(adjust_factor)
                         sell_only = self.evaluate_risk()
@@ -539,8 +578,8 @@ def get_bot():
         'grid_levels': int(os.getenv('GRID_LEVELS', 10)),  # 从环境变量加载网格数量，默认10
         'initial_grid_width': float(os.getenv('INITIAL_GRID_WIDTH', 0.1)),  # 从环境变量加载初始网格宽度，默认10%
         'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
-        'volatility_window': 24,    # 24小时波动率窗口
-        'trend_window': 12         # 12小时趋势窗口
+        'short_period': int(os.getenv('SHORT_PERIOD', 7)),
+        'long_period': int(os.getenv('LONG_PERIOD', 25))
     }
     
     # 创建并运行动态网格交易机器人
