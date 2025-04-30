@@ -447,10 +447,15 @@ class DynamicGridTrader:
         self.logger.info(f"交易对: {self.symbol}")
 
         # 初始化网格参数
-        self.adjust_grid_parameters()
-        sell_only = self.evaluate_risk()
-        self.place_grid_orders(sell_only=sell_only)
-        self.last_adjustment_time = time.time()
+        if self.get_market_trend() > 0:
+            self.enable_trading = True
+            self.adjust_grid_parameters()
+            sell_only = self.evaluate_risk()
+            self.place_grid_orders(sell_only=sell_only)
+            self.last_adjustment_time = time.time()
+        else:
+            self.enable_trading = False
+            self.logger.info("市场趋势向下，不启动交易")
         
         while True:
             try:
@@ -534,14 +539,16 @@ class DynamicGridTrader:
                     market_trend = self.get_market_trend()
                     if market_trend < 0:
                         if self.enable_trading: # 如果市场趋势向下，则平仓
+                            self.logger.info("市场趋势向下，平仓")
+                            send_telegram_message("市场趋势向下，平仓")
                             self.enable_trading = False
                             self.cancel_all_orders()
                             self.close_position()
-                            self.logger.info("市场趋势向下，平仓")
                     elif market_trend > 0: # 如果市场趋势向上，则恢复交易
                         if not self.enable_trading:
-                            self.enable_trading = True
                             self.logger.info("市场趋势向上，恢复交易")
+                            send_telegram_message("市场趋势向上，恢复交易")
+                            self.enable_trading = True
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
