@@ -448,7 +448,7 @@ class DynamicGridTrader:
             self.logger.error(msg)
             send_telegram_message(msg)
 
-    def prepare_position(self, grid_count=5):
+    def prepare_position(self, grid_count=2):
         """准备仓位：市价买入指定网格数量的现货
         
         Args:
@@ -501,7 +501,7 @@ class DynamicGridTrader:
         # 初始化网格参数
         if self.get_market_trend() > 0:
             self.enable_trading = True
-            self.prepare_position()
+            self.prepare_position(2) # 初始化时，准备2个网格
             self.adjust_grid_parameters()
             sell_only = self.evaluate_risk()
             self.place_grid_orders(sell_only=sell_only)
@@ -602,7 +602,7 @@ class DynamicGridTrader:
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
                             self.enable_trading = True
-                            self.prepare_position()
+                            self.prepare_position(6) # 恢复交易时，准备6个网格，新的行情来了
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
