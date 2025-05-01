@@ -215,7 +215,7 @@ class DynamicGridTrader:
         
         # 计算趋势强度
         trend_strength = (ema_short - ema_long) / ema_long
-        return trend_strength.iloc[-1]
+        return trend_strength.iloc[-2] # 使用倒数第二个值，因为最后一个值是当前值，
     
     def get_market_trend(self):
         """获取市场趋势"""
