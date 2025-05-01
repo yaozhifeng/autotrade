@@ -483,9 +483,9 @@ class DynamicGridTrader:
                 symbol=self.symbol,
                 side=SIDE_BUY,
                 type=ORDER_TYPE_MARKET,
-                quantity=round(buy_amount, 6)  # 保留6位小数，防止精度问题
+                quantity=round(buy_amount, 2)  # 保留2位小数，防止精度问题
             )
-            msg = f"已买入 {buy_amount:.6f} {base_asset}，总持仓达到 {target_amount:.6f} {base_asset}"
+            msg = f"已买入 {buy_amount:.2f} {base_asset}，总持仓达到 {target_amount:.2f} {base_asset}"
             self.logger.info(msg)
             send_telegram_message(msg)
         except Exception as e:
