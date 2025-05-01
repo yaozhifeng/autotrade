@@ -421,14 +421,13 @@ class DynamicGridTrader:
         return sell_only
     
     def close_position(self):
-        """平仓函数：保留2个网格的现货，其余全部卖掉"""
+        """平仓函数：全部卖掉"""
         base_asset = self.symbol.replace('USDT', '')
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-        keep_amount = self.quantity * 2  # 保留2个网格的现货
-        sell_amount = base_asset_balance - keep_amount
+        sell_amount = base_asset_balance
         
         if sell_amount <= 0:
-            msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})不超过2个网格({keep_amount:.6f})"
+            msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})"
             self.logger.info(msg)
             send_telegram_message(msg)
             return
@@ -441,11 +440,56 @@ class DynamicGridTrader:
                 type=ORDER_TYPE_MARKET,
                 quantity=round(sell_amount, 6)  # 保留6位小数，防止精度问题
             )
-            msg = f"已平仓，卖出 {sell_amount:.6f} {base_asset}，保留 {keep_amount:.6f} {base_asset}"
+            msg = f"已平仓，卖出 {sell_amount:.6f} {base_asset}"
             self.logger.info(msg)
             send_telegram_message(msg)
         except Exception as e:
             msg = f"平仓失败: {str(e)}"
+            self.logger.error(msg)
+            send_telegram_message(msg)
+
+    def prepare_position(self, grid_count=5):
+        """准备仓位：市价买入指定网格数量的现货
+        
+        Args:
+            grid_count: 需要准备的网格数量，默认2个网格
+        """
+        base_asset = self.symbol.replace('USDT', '')
+        base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+        target_amount = self.quantity * grid_count
+        
+        if base_asset_balance >= target_amount:
+            msg = f"无需买入，当前{base_asset}持仓({base_asset_balance:.6f})已满足{grid_count}个网格({target_amount:.6f})"
+            self.logger.info(msg)
+            send_telegram_message(msg)
+            return
+        
+        buy_amount = target_amount - base_asset_balance
+        
+        try:
+            # 检查USDT余额是否足够
+            current_price = self.get_current_price()
+            required_usdt = buy_amount * current_price
+            usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
+            
+            if usdt_balance < required_usdt:
+                msg = f"USDT余额不足，需要{required_usdt:.2f} USDT，当前余额{usdt_balance:.2f} USDT"
+                self.logger.error(msg)
+                send_telegram_message(msg)
+                return
+                
+            # 市价单买入
+            order = self.client.create_order(
+                symbol=self.symbol,
+                side=SIDE_BUY,
+                type=ORDER_TYPE_MARKET,
+                quantity=round(buy_amount, 6)  # 保留6位小数，防止精度问题
+            )
+            msg = f"已买入 {buy_amount:.6f} {base_asset}，总持仓达到 {target_amount:.6f} {base_asset}"
+            self.logger.info(msg)
+            send_telegram_message(msg)
+        except Exception as e:
+            msg = f"买入失败: {str(e)}"
             self.logger.error(msg)
             send_telegram_message(msg)
 
@@ -457,6 +501,7 @@ class DynamicGridTrader:
         # 初始化网格参数
         if self.get_market_trend() > 0:
             self.enable_trading = True
+            self.prepare_position()
             self.adjust_grid_parameters()
             sell_only = self.evaluate_risk()
             self.place_grid_orders(sell_only=sell_only)
@@ -557,6 +602,7 @@ class DynamicGridTrader:
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
                             self.enable_trading = True
+                            self.prepare_position()
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
