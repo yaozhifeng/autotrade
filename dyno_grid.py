@@ -189,14 +189,14 @@ class DynamicGridTrader:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
     def get_market_data(self):
-        """获取市场数据, 4小时K线"""
+        """获取市场数据, 1小时K线"""
         end_time = datetime.now()
-        start_time = end_time - timedelta(hours=self.long_period*4*2)
+        start_time = end_time - timedelta(hours=self.long_period*1*2)
         
         # 获取K线数据
         klines = self.client.get_historical_klines(
             self.symbol,
-            Client.KLINE_INTERVAL_4HOUR,
+            Client.KLINE_INTERVAL_1HOUR,
             start_time.strftime("%Y-%m-%d %H:%M:%S"),
             end_time.strftime("%Y-%m-%d %H:%M:%S")
         )
@@ -228,7 +228,7 @@ class DynamicGridTrader:
     def get_market_trend(self):
         """获取市场趋势"""
         df = self.get_market_data()
-        return self.calculate_trend(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
+        return self.calculate_trend_macd(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
         """调整网格参数"""
