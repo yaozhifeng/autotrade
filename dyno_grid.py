@@ -216,11 +216,19 @@ class DynamicGridTrader:
         # 计算趋势强度
         trend_strength = (ema_short - ema_long) / ema_long
         return trend_strength.iloc[-2] # 使用倒数第二个值，因为最后一个值是当前值，
+
+    def calculate_trend_macd(self, df):
+        """计算市场趋势"""
+        # 使用MACD指标判断趋势
+        macd = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
+        macd_signal = macd.ewm(span=9, adjust=False).mean()
+        macd_histogram = macd - macd_signal
+        return macd_histogram.iloc[-2] # 使用倒数第二个值，因为最后一个值是当前值，
     
     def get_market_trend(self):
         """获取市场趋势"""
         df = self.get_market_data()
-        return self.calculate_trend(df)
+        return self.calculate_trend(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
         """调整网格参数"""
