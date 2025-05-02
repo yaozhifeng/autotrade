@@ -438,9 +438,9 @@ class DynamicGridTrader:
                 symbol=self.symbol,
                 side=SIDE_SELL,
                 type=ORDER_TYPE_MARKET,
-                quantity=round(sell_amount, 6)  # 保留6位小数，防止精度问题
+                quantity=round(sell_amount, 2)  # 保留2位小数，防止精度问题
             )
-            msg = f"已平仓，卖出 {sell_amount:.6f} {base_asset}"
+            msg = f"已平仓，卖出 {sell_amount:.2f} {base_asset}"
             self.logger.info(msg)
             send_telegram_message(msg)
         except Exception as e:
@@ -602,7 +602,7 @@ class DynamicGridTrader:
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
                             self.enable_trading = True
-                            self.prepare_position(6) # 恢复交易时，准备6个网格，新的行情来了
+                            self.prepare_position(4) # 恢复交易时，准备4个网格，新的行情来了
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
