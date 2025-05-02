@@ -586,8 +586,8 @@ class DynamicGridTrader:
                 # 回答Telegram消息
                 self.answer_telegram()
 
-                # 每小时检查市场趋势，看是否需要终止交易并平仓
-                if self.last_check_time is None or time.time() - self.last_check_time >= 3600:
+                # 每半小时检查市场趋势，看是否需要终止交易并平仓
+                if self.last_check_time is None or time.time() - self.last_check_time >= 1800:
                     self.last_check_time = time.time()
                     market_trend = self.get_market_trend()
                     if market_trend < 0:
