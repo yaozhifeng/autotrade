@@ -219,11 +219,18 @@ class DynamicGridTrader:
 
     def calculate_trend_macd(self, df):
         """计算市场趋势"""
-        # 使用MACD指标判断趋势
+        # 使用MACD指标判断趋势，以最后第二个值为准，用最新的值做校验
         macd = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
         macd_signal = macd.ewm(span=9, adjust=False).mean()
         macd_histogram = macd - macd_signal
-        return macd_histogram.iloc[-2] # 使用倒数第二个值，因为最后一个值是当前值，
+        trend = macd_histogram.iloc[-2] # 使用倒数第二个值
+        latest_trend = macd_histogram.iloc[-1] # 用当前值校验是否趋势没有变化，避免假信号
+        if trend > 0 and latest_trend > 0:
+            return 1
+        elif trend < 0 and latest_trend < 0:
+            return -1
+        else:
+            return 0
     
     def get_market_trend(self):
         """获取市场趋势"""
