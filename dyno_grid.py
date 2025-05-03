@@ -609,8 +609,8 @@ class DynamicGridTrader:
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
                             self.enable_trading = True
-                            self.prepare_position(4) # 恢复交易时，准备4个网格，新的行情来了
-                            self.adjust_grid_parameters()
+                            self.prepare_position(6) # 恢复交易时，准备6个网格，新的行情来了
+                            self.adjust_grid_parameters(1.0)
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
 
