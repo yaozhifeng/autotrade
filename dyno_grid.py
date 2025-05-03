@@ -604,6 +604,7 @@ class DynamicGridTrader:
                             self.enable_trading = False
                             self.cancel_all_orders()
                             self.close_position()
+                            self.send_daily_briefing()
                     elif market_trend > 0: # 如果市场趋势向上，则恢复交易
                         if not self.enable_trading:
                             self.logger.info("市场趋势向上，恢复交易")
@@ -613,7 +614,7 @@ class DynamicGridTrader:
                             self.adjust_grid_parameters(1.0)
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
-
+                            self.send_daily_briefing()
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
