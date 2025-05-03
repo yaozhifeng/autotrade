@@ -479,11 +479,11 @@ class DynamicGridTrader:
             required_usdt = buy_amount * current_price
             usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
             
-            if usdt_balance < required_usdt:
-                msg = f"USDT余额不足，需要{required_usdt:.2f} USDT，当前余额{usdt_balance:.2f} USDT"
+            if usdt_balance < required_usdt: #calculate how much we can afford
+                buy_amount = usdt_balance / current_price
+                msg = f"USDT余额不足，需要{required_usdt:.2f} USDT，当前余额{usdt_balance:.2f} USDT，只能买入{buy_amount:.2f} {base_asset}"
                 self.logger.error(msg)
                 send_telegram_message(msg)
-                return
                 
             # 市价单买入
             order = self.client.create_order(
