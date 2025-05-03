@@ -136,14 +136,14 @@ class DynamicGridTrader:
 
         adjustment_factor = self.adjustment_factor
         if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < buy_sell_threshold_low:
-            if self.adjustment_factor == 1.0:
+            if self.adjustment_factor >= 1.2:
+                adjustment_factor = 1.0
+            else:
                 adjustment_factor = 0.8
-            elif self.adjustment_factor == 1.2:
-                adjustment_factor = 1.0
         elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > buy_sell_threshold_high:
-            if self.adjustment_factor == 0.8:
+            if self.adjustment_factor <= 0.8:
                 adjustment_factor = 1.0
-            elif self.adjustment_factor == 1.0:
+            else:
                 adjustment_factor = 1.2
 
         # 重置每日统计数据
