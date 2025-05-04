@@ -226,8 +226,16 @@ class DynamicGridTrader:
         trend = macd_histogram.iloc[-2] # 使用倒数第二个值
         latest_trend = macd_histogram.iloc[-1] # 用当前值校验是否趋势没有变化，避免假信号
         if trend > 0 and latest_trend > 0:
+            # Print detailed market status for upward trend
+            self.logger.info(f"市场状态: 上升趋势")
+            self.logger.info(f"MACD柱状值: {trend:.6f}")
+            self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
             return 1
         elif trend < 0 and latest_trend < 0:
+            # Print detailed market status for downward trend
+            self.logger.info(f"市场状态: 下降趋势")
+            self.logger.info(f"MACD柱状值: {trend:.6f}")
+            self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
             return -1
         else:
             return 0
