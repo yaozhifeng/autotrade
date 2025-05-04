@@ -238,7 +238,7 @@ class DynamicGridTrader:
         """获取市场趋势"""
         df = self.get_market_data()
         trend = self.calculate_trend_macd(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
-        self.logger.info(f"市场趋势: {trend}")
+        self.logger.info(f"市场趋势: {trend:.6f}")
         return trend
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
