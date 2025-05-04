@@ -225,17 +225,11 @@ class DynamicGridTrader:
         macd_histogram = macd - macd_signal
         trend = macd_histogram.iloc[-2] # 使用倒数第二个值
         latest_trend = macd_histogram.iloc[-1] # 用当前值校验是否趋势没有变化，避免假信号
+        self.logger.info(f"MACD柱状值: {trend:.6f}")
+        self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
         if trend > 0 and latest_trend > 0:
-            # Print detailed market status for upward trend
-            self.logger.info(f"市场状态: 上升趋势")
-            self.logger.info(f"MACD柱状值: {trend:.6f}")
-            self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
             return 1
         elif trend < 0 and latest_trend < 0:
-            # Print detailed market status for downward trend
-            self.logger.info(f"市场状态: 下降趋势")
-            self.logger.info(f"MACD柱状值: {trend:.6f}")
-            self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
             return -1
         else:
             return 0
@@ -618,7 +612,7 @@ class DynamicGridTrader:
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
                             self.enable_trading = True
-                            self.prepare_position(6) # 恢复交易时，准备6个网格，新的行情来了
+                            self.prepare_position(4) # 恢复交易时，准备4个网格，新的行情来了
                             self.adjust_grid_parameters(1.0)
                             self.place_grid_orders()
                             self.last_adjustment_time = time.time()
@@ -629,6 +623,7 @@ class DynamicGridTrader:
                     adjust_factor = self.send_daily_briefing()
                     if (not adjust_factor == self.adjustment_factor or self.should_adjust_grid()):
                         self.cancel_all_orders()
+                        self.prepare_position(2)
                         self.adjust_grid_parameters(adjust_factor)
                         sell_only = self.evaluate_risk()
                         self.place_grid_orders(sell_only=sell_only)
