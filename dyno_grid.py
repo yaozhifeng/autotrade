@@ -184,7 +184,6 @@ class DynamicGridTrader:
                         self.adjust_grid_parameters(factor)
                         sell_only = self.evaluate_risk()
                         self.place_grid_orders(sell_only=sell_only)
-                        self.last_adjustment_time = time.time()
         except Exception as e:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
@@ -524,7 +523,6 @@ class DynamicGridTrader:
             self.adjust_grid_parameters()
             sell_only = self.evaluate_risk()
             self.place_grid_orders(sell_only=sell_only)
-            self.last_adjustment_time = time.time()
         else:
             self.enable_trading = False
             self.logger.info("市场趋势向下，不启动交易")
@@ -624,7 +622,6 @@ class DynamicGridTrader:
                             self.prepare_position(4) # 恢复交易时，准备4个网格，新的行情来了
                             self.adjust_grid_parameters(1.0)
                             self.place_grid_orders()
-                            self.last_adjustment_time = time.time()
                             self.send_daily_briefing()
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
@@ -636,7 +633,6 @@ class DynamicGridTrader:
                         self.adjust_grid_parameters(adjust_factor)
                         sell_only = self.evaluate_risk()
                         self.place_grid_orders(sell_only=sell_only)
-                        self.last_adjustment_time = time.time()
                     
                 time.sleep(10)
             except KeyboardInterrupt:
