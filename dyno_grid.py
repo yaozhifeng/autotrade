@@ -512,6 +512,7 @@ class DynamicGridTrader:
         """运行动态网格交易机器人"""
         self.logger.info("启动动态网格交易机器人...")
         self.logger.info(f"交易对: {self.symbol}")
+        send_telegram_message(f"启动动态网格交易机器人... 交易对: {self.symbol}")
 
         # 初始化网格参数
         if self.get_market_trend() > 0:
@@ -524,7 +525,7 @@ class DynamicGridTrader:
         else:
             self.enable_trading = False
             self.logger.info("市场趋势向下，不启动交易")
-        
+            send_telegram_message("市场趋势向下，不启动交易")
         while True:
             try:
                 # 检查订单状态
