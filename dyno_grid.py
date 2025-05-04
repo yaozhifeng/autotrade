@@ -223,21 +223,23 @@ class DynamicGridTrader:
         macd = df['close'].ewm(span=12, adjust=False).mean() - df['close'].ewm(span=26, adjust=False).mean()
         macd_signal = macd.ewm(span=9, adjust=False).mean()
         macd_histogram = macd - macd_signal
-        trend = macd_histogram.iloc[-2] # 使用倒数第二个值
-        latest_trend = macd_histogram.iloc[-1] # 用当前值校验是否趋势没有变化，避免假信号
+        trend = float(macd_histogram.iloc[-2]) # 使用倒数第二个值
+        latest_trend = float(macd_histogram.iloc[-1]) # 用当前值校验是否趋势没有变化，避免假信号
         self.logger.info(f"MACD柱状值: {trend:.6f}")
         self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
         if (trend > 0) and (latest_trend > 0):
-            return 1
+            return trend
         elif (trend < 0) and (latest_trend < 0):
-            return -1
+            return trend
         else:
             return 0
     
     def get_market_trend(self):
         """获取市场趋势"""
         df = self.get_market_data()
-        return self.calculate_trend_macd(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
+        trend = self.calculate_trend_macd(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
+        self.logger.info(f"市场趋势: {trend}")
+        return trend
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
         """调整网格参数"""
