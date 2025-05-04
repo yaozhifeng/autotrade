@@ -227,9 +227,9 @@ class DynamicGridTrader:
         latest_trend = macd_histogram.iloc[-1] # 用当前值校验是否趋势没有变化，避免假信号
         self.logger.info(f"MACD柱状值: {trend:.6f}")
         self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
-        if trend > 0 and latest_trend > 0:
+        if (trend > 0) and (latest_trend > 0):
             return 1
-        elif trend < 0 and latest_trend < 0:
+        elif (trend < 0) and (latest_trend < 0):
             return -1
         else:
             return 0
