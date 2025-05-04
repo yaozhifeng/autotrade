@@ -239,6 +239,7 @@ class DynamicGridTrader:
         df = self.get_market_data()
         trend = self.calculate_trend_macd(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
         self.logger.info(f"市场趋势: {trend:.6f}")
+        self.last_check_time = time.time()
         return trend
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
@@ -360,6 +361,8 @@ class DynamicGridTrader:
 
         lowest_price = min(order_info['price'] for order_info in self.orders.values())
         highest_price = max(order_info['price'] for order_info in self.orders.values())
+
+        self.last_adjustment_time = time.time()
 
         msg = f"网格订单已放置:\n"
         msg += f"最低价格: {lowest_price:.2f} USDT\n"
@@ -604,7 +607,6 @@ class DynamicGridTrader:
 
                 # 每半小时检查市场趋势，看是否需要终止交易并平仓
                 if self.last_check_time is None or time.time() - self.last_check_time >= 1800:
-                    self.last_check_time = time.time()
                     market_trend = self.get_market_trend()
                     if market_trend < 0:
                         if self.enable_trading: # 如果市场趋势向下，则平仓
