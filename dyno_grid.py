@@ -451,7 +451,9 @@ class DynamicGridTrader:
                 type=ORDER_TYPE_MARKET,
                 quantity=round(sell_amount, 2)  # 保留2位小数，防止精度问题
             )
-            msg = f"已平仓，卖出 {sell_amount:.2f} {base_asset}"
+            # Get the actual executed price from the order fills
+            executed_price = float(order['fills'][0]['price'])
+            msg = f"已平仓，卖出 {sell_amount:.2f} {base_asset}，价格: {executed_price:.2f} USDT"
             self.logger.info(msg)
             send_telegram_message(msg)
         except Exception as e:
@@ -496,7 +498,9 @@ class DynamicGridTrader:
                 type=ORDER_TYPE_MARKET,
                 quantity=round(buy_amount, 2)  # 保留2位小数，防止精度问题
             )
-            msg = f"已买入 {buy_amount:.2f} {base_asset}，总持仓达到 {target_amount:.2f} {base_asset}"
+            # Get the actual executed price from the order fills
+            executed_price = float(order['fills'][0]['price'])
+            msg = f"已买入 {buy_amount:.2f} {base_asset}，总持仓达到 {target_amount:.2f} {base_asset}，价格: {executed_price:.2f} USDT"
             self.logger.info(msg)
             send_telegram_message(msg)
         except Exception as e:
