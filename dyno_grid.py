@@ -520,6 +520,7 @@ class DynamicGridTrader:
     def chase_grid(self):
         """追高，买入两个网格的现货，并重新调整网络"""
         try:
+            self.cancel_all_orders() # 取消所有未成交订单
             self.prepare_position(2)  # 准备两个网格的现货
             # 调整网格参数
             self.adjust_grid_parameters()
