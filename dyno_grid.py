@@ -624,7 +624,8 @@ class DynamicGridTrader:
                             self.prepare_position(4) # 恢复交易时，准备4个网格，新的行情来了
                             self.adjust_grid_parameters(1.0)
                             self.place_grid_orders()
-                            self.send_daily_briefing()
+                            self.daily_stats['last_price'] = self.daily_stats['initial_price'] = current_price
+                            self.last_briefing_time = time.time()
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
