@@ -444,7 +444,7 @@ class DynamicGridTrader:
         """平仓函数：全部卖掉"""
         base_asset = self.symbol.replace('USDT', '')
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-        sell_amount = base_asset_balance
+        sell_amount = base_asset_balance - 0.1 # 保留0.1个币，避免手续费问题
         
         if sell_amount <= 0:
             msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})"
