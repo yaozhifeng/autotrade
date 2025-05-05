@@ -393,6 +393,11 @@ class DynamicGridTrader:
                 return True
             
         return False
+    
+    def get_sell_order_count(self):
+        """获取卖单数量"""
+        sell_orders = [order for order in self.orders.values() if order['side'] == 'SELL']
+        return len(sell_orders)
 
     def show_orders(self):
         """显示当前订单"""
@@ -446,7 +451,7 @@ class DynamicGridTrader:
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
         sell_amount = base_asset_balance * 0.99 # 保留1%，避免手续费问题
         
-        if sell_amount <= 0.001: # 如果卖出数量小于0.001，直接返回
+        if sell_amount <= 0.01: # 如果卖出数量小于0.01，直接返回
             msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})"
             self.logger.info(msg)
             send_telegram_message(msg)
@@ -657,6 +662,10 @@ class DynamicGridTrader:
                             self.place_grid_orders()
                             self.daily_stats['last_price'] = self.daily_stats['initial_price'] = current_price
                             self.last_briefing_time = time.time()
+                    # 判断要不要追高
+                    if self.enable_trading and self.get_sell_order_count() == 0:
+                        self.chase_grid()
+                        
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
