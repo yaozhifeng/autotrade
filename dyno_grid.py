@@ -9,6 +9,7 @@ from pytz import timezone
 from dotenv import load_dotenv
 import requests
 import os
+import math
 
 # Load environment variables from .env file
 load_dotenv()
@@ -500,7 +501,7 @@ class DynamicGridTrader:
                 symbol=self.symbol,
                 side=SIDE_BUY,
                 type=ORDER_TYPE_MARKET,
-                quantity=round(buy_amount, 2)  # 保留2位小数，防止精度问题
+                quantity=math.ceil(buy_amount * 100) / 100  # 保留2位小数，向上进位
             )
             # Get the actual executed price from the order fills
             executed_price = float(order['fills'][0]['price'])
