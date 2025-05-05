@@ -75,10 +75,11 @@ class DynamicGridTrader:
             'sell_orders': 0,
             'total_buy_price': 0.0,
             'total_sell_price': 0.0,
-            'initial_balance': self.get_total_balance(),
-            'initial_price': self.get_current_price(),
-            'final_balance': 0.0,
-            'final_price': 0.0
+            'initial_balance': self.get_total_balance(), # 本周期初始余额
+            'initial_price': self.get_current_price(), # 本周期初始价格
+            'last_price': self.get_current_price(), # 上一周期初始价格
+            'final_balance': 0.0, # 本周期最终余额
+            'final_price': 0.0 # 本周期最终价格
         }
         self.last_briefing_time = time.time()
 
@@ -147,6 +148,7 @@ class DynamicGridTrader:
                 adjustment_factor = 1.2
 
         # 重置每日统计数据
+        self.daily_stats['last_price'] = self.daily_stats['initial_price']
         self.daily_stats = {
             'buy_orders': 0,
             'sell_orders': 0,
@@ -604,10 +606,12 @@ class DynamicGridTrader:
                     market_trend = self.get_market_trend()
                     current_price = self.get_current_price()
                     initial_price = self.daily_stats['initial_price']
-                    if current_price < initial_price * 0.92: # 如果价格低于当前周期初始价格的92%，则平仓止损
+                    last_price = self.daily_stats['last_price']
+                    stop_loss = float(os.getenv('STOP_LOSS', 0.92)) # 止损比例
+                    if current_price < last_price * stop_loss or current_price < initial_price * stop_loss: # 如果价格低于前两个周期初始价格的达到止损比例，则平仓止损
                         if self.enable_trading: 
                             self.logger.info("市场趋势向下，平仓")
-                            send_telegram_message("市场趋势向下，平仓")
+                            send_telegram_message(f"市场趋势向下，平仓，当前价格: {current_price:.2f} USDT")
                             self.enable_trading = False
                             self.cancel_all_orders()
                             self.close_position()
