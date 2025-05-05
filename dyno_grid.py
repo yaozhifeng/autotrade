@@ -517,16 +517,12 @@ class DynamicGridTrader:
         send_telegram_message(f"启动动态网格交易机器人... 交易对: {self.symbol}")
 
         # 初始化网格参数
-        if self.get_market_trend() > 0:
-            self.enable_trading = True
-            self.prepare_position(2) # 初始化时，准备2个网格
-            self.adjust_grid_parameters()
-            sell_only = self.evaluate_risk()
-            self.place_grid_orders(sell_only=sell_only)
-        else:
-            self.enable_trading = False
-            self.logger.info("市场趋势向下，不启动交易")
-            send_telegram_message("市场趋势向下，不启动交易")
+        self.enable_trading = True
+        self.prepare_position(2) # 初始化时，准备2个网格
+        self.adjust_grid_parameters(1.0)
+        sell_only = self.evaluate_risk()
+        self.place_grid_orders(sell_only=sell_only)
+
         while True:
             try:
                 # 检查订单状态
@@ -606,8 +602,10 @@ class DynamicGridTrader:
                 # 每半小时检查市场趋势，看是否需要终止交易并平仓
                 if self.last_check_time is None or time.time() - self.last_check_time >= 1800:
                     market_trend = self.get_market_trend()
-                    if market_trend < 0:
-                        if self.enable_trading: # 如果市场趋势向下，则平仓
+                    current_price = self.get_current_price()
+                    initial_price = self.daily_stats['initial_price']
+                    if current_price < initial_price * 0.92: # 如果价格低于当前周期初始价格的92%，则平仓止损
+                        if self.enable_trading: 
                             self.logger.info("市场趋势向下，平仓")
                             send_telegram_message("市场趋势向下，平仓")
                             self.enable_trading = False
