@@ -177,16 +177,20 @@ class DynamicGridTrader:
                     self.last_update_id = message['update_id'] + 1
                     text = message['message']['text']
                     self.logger.info(f"收到Telegram消息: {text}")
-                    if text == '/orders':
+                    if text == '/orders': # 查看当前订单
                         self.show_orders()
-                    elif text == '/portfolio':
+                    elif text == '/portfolio': # 查看投资组合
                         self.check_portfolio()
-                    elif text.startswith('/adjust'):
+                    elif text.startswith('/adjust'): # 调整网格参数
                         factor = float(text.split(' ')[1]) if len(text.split(' ')) > 1 else 1.0
                         self.cancel_all_orders()
                         self.adjust_grid_parameters(factor)
                         sell_only = self.evaluate_risk()
                         self.place_grid_orders(sell_only=sell_only)
+                    elif text == '/chase': # 手动追高
+                        self.chase_grid()
+                    elif text == '/close': # 手动平仓
+                        self.close_grid()
         except Exception as e:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
@@ -512,6 +516,31 @@ class DynamicGridTrader:
             msg = f"买入失败: {str(e)}"
             self.logger.error(msg)
             send_telegram_message(msg)
+
+    def chase_grid(self):
+        """追高，买入两个网格的现货，并重新调整网络"""
+        try:
+            self.prepare_position(2)  # 准备两个网格的现货
+            # 调整网格参数
+            self.adjust_grid_parameters()
+            self.place_grid_orders()
+            msg = f"追高成功，当前价格: {self.get_current_price():.2f} USDT"
+            self.logger.info(msg)
+            send_telegram_message(msg)
+        except Exception as e:
+            self.logger.error(f"追高失败: {str(e)}")
+            send_telegram_message(f"追高失败: {str(e)}")
+
+    def close_grid(self):
+        """平掉当前网格的现货，停止交易"""
+        try:
+            self.enable_trading = False
+            self.cancel_all_orders()
+            self.close_position()
+            self.send_daily_briefing()
+        except Exception as e:
+            self.logger.error(f"平掉当前网格的现货失败: {str(e)}")
+            send_telegram_message(f"平掉当前网格的现货失败: {str(e)}")
 
     def run(self):
         """运行动态网格交易机器人"""
