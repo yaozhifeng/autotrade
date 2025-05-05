@@ -149,12 +149,13 @@ class DynamicGridTrader:
                 adjustment_factor = 1.2
 
         # 重置每日统计数据
-        self.daily_stats['last_price'] = self.daily_stats['initial_price']
+        last_price = self.daily_stats['initial_price']
         self.daily_stats = {
             'buy_orders': 0,
             'sell_orders': 0,
             'total_buy_price': 0.0,
             'total_sell_price': 0.0,
+            'last_price': last_price,
             'initial_balance': self.get_total_balance(),
             'initial_price': self.get_current_price(),
             'final_balance': 0.0,
@@ -665,7 +666,7 @@ class DynamicGridTrader:
                     # 判断要不要追高
                     if self.enable_trading and self.get_sell_order_count() == 0:
                         self.chase_grid()
-                        
+
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
