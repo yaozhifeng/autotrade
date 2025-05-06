@@ -685,7 +685,7 @@ class DynamicGridTrader:
                                 self.adjust_grid_parameters(1.0)
                                 self.place_grid_orders()
                     # 判断要不要追高
-                    if self.enable_trading and self.get_sell_order_count() == 0:
+                    if self.enable_trading and self.in_bull_market and self.get_sell_order_count() == 0:
                         self.chase_grid()
 
                 # 检查是否需要发送每日简报
