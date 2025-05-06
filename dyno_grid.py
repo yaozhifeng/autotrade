@@ -654,7 +654,10 @@ class DynamicGridTrader:
                     initial_price = self.daily_stats['initial_price']
                     last_price = self.daily_stats['last_price']
                     stop_loss = float(os.getenv('STOP_LOSS', 0.92)) # 止损比例
-                    if current_price < last_price * stop_loss or current_price < initial_price * stop_loss: # 如果价格低于前两个周期初始价格的达到止损比例，则平仓止损
+                    stop_loss_price = max(initial_price, last_price) * stop_loss # 止损价格
+                    self.logger.info(f"当前价格: {current_price:.2f} USDT, 止损价格: {stop_loss_price:.2f} USDT")
+                    # 判断是否需要平仓止损
+                    if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，则平仓止损
                         if self.enable_trading: 
                             self.logger.info("市场趋势向下，平仓")
                             send_telegram_message(f"市场趋势向下，平仓，当前价格: {current_price:.2f} USDT")
