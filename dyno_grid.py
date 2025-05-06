@@ -28,7 +28,7 @@ def send_telegram_message(msg):
 
 class DynamicGridTrader:
     def __init__(self, api_key, api_secret, symbol='LTCUSDT',
-                 grid_levels=10, initial_grid_width=0.1,
+                 grid_levels=10, 
                  quantity_per_grid=0.1,
                  short_period=7,
                  long_period=25):
@@ -38,13 +38,11 @@ class DynamicGridTrader:
         :param api_secret: 币安API密钥
         :param symbol: 交易对
         :param grid_levels: 网格数量
-        :param initial_grid_width: 初始网格宽度（百分比）
         :param quantity_per_grid: 每个网格的交易数量
         """
         self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET', 'False').lower() == 'true')
         self.symbol = symbol
         self.grid_levels = grid_levels
-        self.initial_grid_width = initial_grid_width
         self.quantity = quantity_per_grid
         self.last_update_id = None #Last telegram update id
         self.adjustment_factor = 1.0
@@ -709,7 +707,6 @@ def get_bot():
         'api_secret': os.getenv('API_SECRET'),
         'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
         'grid_levels': int(os.getenv('GRID_LEVELS', 10)),  # 从环境变量加载网格数量，默认10
-        'initial_grid_width': float(os.getenv('INITIAL_GRID_WIDTH', 0.1)),  # 从环境变量加载初始网格宽度，默认10%
         'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
         'short_period': int(os.getenv('SHORT_PERIOD', 7)),
         'long_period': int(os.getenv('LONG_PERIOD', 25))
