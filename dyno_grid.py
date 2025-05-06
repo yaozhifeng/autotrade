@@ -310,6 +310,11 @@ class DynamicGridTrader:
         base_asset = self.symbol.replace('USDT', '')
         usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
+
+        # Calculate the max buy orders we can place, based on the max_base_asset to avoid buying too much
+        max_base_asset = float(os.getenv('MAX_BASE_ASSET', 10.0))  # Maximum allowed base asset balance
+        max_buy_orders = int((max_base_asset-base_asset_balance) / self.quantity)  # Maximum number of buy orders we can place
+
         
         buy_orders_placed = 0
         sell_orders_placed = 0
@@ -318,7 +323,7 @@ class DynamicGridTrader:
         for price in sorted(buy_prices, reverse=True):
             try:
                 required_usdt = self.quantity * price
-                if usdt_balance >= required_usdt and not sell_only:
+                if usdt_balance >= required_usdt and not sell_only and buy_orders_placed < max_buy_orders:
                     # Place buy order
                     order = self.client.create_order(
                         symbol=self.symbol,
