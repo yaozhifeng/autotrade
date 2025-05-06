@@ -29,7 +29,8 @@ def send_telegram_message(msg):
 class DynamicGridTrader:
     def __init__(self, api_key, api_secret, symbol='LTCUSDT',
                  grid_levels=10, 
-                 quantity_per_grid=0.1
+                 quantity_per_grid=0.1,
+                 grid_levels_narrow=4,
                  ):
         """
         初始化动态网格交易机器人
@@ -43,6 +44,7 @@ class DynamicGridTrader:
         self.symbol = symbol
         self.grid_levels = grid_levels
         self.quantity = quantity_per_grid
+        self.grid_levels_narrow = grid_levels_narrow
 
         # 初始化订单和网格状态
         self.orders = {}
@@ -54,7 +56,8 @@ class DynamicGridTrader:
         self.adjustment_factor = 1.0
         self.enable_trading = True
         self.last_check_time = None
-        
+        self.market_trend = 0
+        self.in_bull_market = True # 是否处于牛市
         # 设置日志
         logging.basicConfig(
             level=logging.INFO,
@@ -193,7 +196,7 @@ class DynamicGridTrader:
     def get_market_data(self):
         """获取市场数据, 1小时K线"""
         end_time = datetime.now()
-        start_time = end_time - timedelta(hours=self.long_period*1*2)
+        start_time = end_time - timedelta(hours=72) # 获取72小时数据
         
         # 获取K线数据
         klines = self.client.get_historical_klines(
@@ -230,9 +233,9 @@ class DynamicGridTrader:
         self.logger.info(f"MACD柱状值: {trend:.6f}")
         self.logger.info(f"最新MACD柱状值: {latest_trend:.6f}")
         if (trend > 0) and (latest_trend > 0):
-            return trend
+            return 1
         elif (trend < 0) and (latest_trend < 0):
-            return trend
+            return -1
         else:
             return 0
     
@@ -242,21 +245,28 @@ class DynamicGridTrader:
         trend = self.calculate_trend_macd(df) # 使用EMA指标判断趋势, 可以尝试使用MACD指标判断趋势
         self.logger.info(f"市场趋势: {trend:.6f}")
         self.last_check_time = time.time()
+        self.market_trend = trend
         return trend
 
     def adjust_grid_parameters(self, adjust_factor=1.0):
         """调整网格参数"""
         try:
-            # 使用当前价格作为市场数据, 忽略波动率和趋势
+            # 使用当前价格作为市场数据
             current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
             self.current_grid = []
             
-            # 根据波动率调整网格宽度
+            # 根据系数调整网格间距
             self.adjustment_factor = adjust_factor
             grid_gain = float(os.getenv('GRID_GAIN', 0.005)) * adjust_factor  #  单网格利润, 默认 0.5%, 并按系数调整
             self.grid_gap = grid_gain * current_price
 
-            for i in range(self.grid_levels//2):
+            # 根据市场趋势设置网格数量
+            if self.market_trend >= 0:
+                grids = self.grid_levels//2
+            else:
+                grids = self.grid_levels_narrow//2
+
+            for i in range(grids):
                 self.current_grid.append(current_price + self.grid_gap * (i+1))
                 self.current_grid.append(current_price - self.grid_gap * (i+1))
             
@@ -265,7 +275,7 @@ class DynamicGridTrader:
             msg = f"调整网格(系数 {adjust_factor:.1f}):\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
             msg += f"新网格范围: {min(self.current_grid):.2f} - {max(self.current_grid):.2f} USDT\n"
-            msg += f"网格数量: {self.grid_levels}\n"
+            msg += f"网格数量: {grids*2}\n"
             msg += f"网格间隔: {self.grid_gap:.2f} USDT\n"
             msg += f"每格利润: {profit_per_grid_percent:.2f}%"
             self.logger.info(msg)
@@ -629,6 +639,8 @@ class DynamicGridTrader:
         send_telegram_message(f"启动动态网格交易机器人... 交易对: {self.symbol}")
 
         # 初始化网格参数
+        market_trend = self.get_market_trend()
+        self.in_bull_market = market_trend >= 0
         self.enable_trading = True
         self.prepare_position(2) # 初始化时，准备2个网格
         self.adjust_grid_parameters(1.0)
@@ -655,22 +667,42 @@ class DynamicGridTrader:
                     # 判断是否需要平仓止损
                     if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，则平仓止损
                         if self.enable_trading: 
-                            self.logger.info("市场趋势向下，平仓")
-                            send_telegram_message(f"市场趋势向下，平仓，当前价格: {current_price:.2f} USDT")
-                            self.enable_trading = False
+                            self.in_bull_market = False # 标记熊市
+                            self.logger.info("市场趋势向下，触发止损平仓")
+                            send_telegram_message(f"市场趋势向下，触发止损平仓，当前价格: {current_price:.2f} USDT")
+                            self.enable_trading = False # 停止交易
                             self.cancel_all_orders()
                             self.close_position()
                             self.send_daily_briefing()
                     elif market_trend > 0: # 如果市场趋势向上，则恢复交易
-                        if not self.enable_trading:
+                        if not self.enable_trading: # 之前交易已停止，可以恢复
+                            self.in_bull_market = True # 标记牛市
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
                             self.enable_trading = True
-                            self.prepare_position(4) # 恢复交易时，准备4个网格，新的行情来了
+                            self.prepare_position(4) # 恢复交易时，准备4个网格
                             self.adjust_grid_parameters(1.0)
                             self.place_grid_orders()
                             self.daily_stats['last_price'] = self.daily_stats['initial_price'] = current_price
                             self.last_briefing_time = time.time()
+                        elif not self.in_bull_market: # 之前是熊市，转到牛市交易规则
+                            self.in_bull_market = True # 标记牛市
+                            self.logger.info("市场趋势向上，切换到牛市交易规则")
+                            send_telegram_message("市场趋势向上，切换到牛市交易规则")
+                            self.cancel_all_orders()
+                            self.prepare_position(4) # 恢复交易时，准备4个网格
+                            self.adjust_grid_parameters(1.0)
+                            self.place_grid_orders()
+                    elif market_trend < 0: # 如果市场趋势向下，平仓保留 2 格，继续交易
+                        if self.enable_trading:
+                            if self.in_bull_market: #刚从牛市转换到熊市
+                                self.in_bull_market = False # 标记熊市
+                                self.logger.info("市场趋势向下，平仓保留 2 格，继续交易")
+                                send_telegram_message("市场趋势向下，平仓保留 2 格，继续交易")
+                                self.cancel_all_orders()
+                                self.close_position(2)
+                                self.adjust_grid_parameters(1.0)
+                                self.place_grid_orders()
                     # 判断要不要追高
                     if self.enable_trading and self.get_sell_order_count() == 0:
                         self.chase_grid()
@@ -705,7 +737,8 @@ def get_bot():
         'api_secret': os.getenv('API_SECRET'),
         'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
         'grid_levels': int(os.getenv('GRID_LEVELS', 10)),  # 从环境变量加载网格数量，默认10
-        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0))   # 每个网格的交易数量
+        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
+        'grid_levels_narrow': int(os.getenv('GRID_LEVELS_NARROW', 4))  # 从环境变量加载窄网格数量，默认4
     }
     
     # 创建并运行动态网格交易机器人
