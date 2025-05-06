@@ -184,8 +184,7 @@ class DynamicGridTrader:
                         factor = float(text.split(' ')[1]) if len(text.split(' ')) > 1 else 1.0
                         self.cancel_all_orders()
                         self.adjust_grid_parameters(factor)
-                        sell_only = self.evaluate_risk()
-                        self.place_grid_orders(sell_only=sell_only)
+                        self.place_grid_orders()
                     elif text == '/chase': # 手动追高
                         self.chase_grid()
                     elif text == '/close': # 手动平仓
@@ -301,7 +300,7 @@ class DynamicGridTrader:
         except Exception as e:
             self.logger.error(f"取消订单失败: {str(e)}")
 
-    def place_grid_orders(self, buy_only = False, sell_only = False):
+    def place_grid_orders(self):
         """放置网格订单"""
         if self.current_grid is None:
             self.adjust_grid_parameters()
@@ -320,7 +319,6 @@ class DynamicGridTrader:
         max_base_asset = float(os.getenv('MAX_BASE_ASSET', 10.0))  # Maximum allowed base asset balance
         max_buy_orders = int((max_base_asset-base_asset_balance) / self.quantity)  # Maximum number of buy orders we can place
 
-        
         buy_orders_placed = 0
         sell_orders_placed = 0
 
@@ -328,7 +326,7 @@ class DynamicGridTrader:
         for price in sorted(buy_prices, reverse=True):
             try:
                 required_usdt = self.quantity * price
-                if usdt_balance >= required_usdt and not sell_only and buy_orders_placed < max_buy_orders:
+                if usdt_balance >= required_usdt and buy_orders_placed < max_buy_orders:
                     # Place buy order
                     order = self.client.create_order(
                         symbol=self.symbol,
@@ -353,7 +351,7 @@ class DynamicGridTrader:
         # Place sell orders from lowest price to highest price
         for price in sorted(sell_prices):
             try:
-                if base_asset_balance >= self.quantity and not buy_only:
+                if base_asset_balance >= self.quantity:
                     # Place sell order
                     order = self.client.create_order(
                         symbol=self.symbol,
@@ -439,23 +437,6 @@ class DynamicGridTrader:
         self.logger.info(f"Total balance: {total_balance:.2f} USDT or {total_balance/current_price:.8f} in {base_asset}")
         send_telegram_message(f"Total balance: {total_balance:.2f} USDT or {total_balance/current_price:.8f} in {base_asset}")
 
-    def evaluate_risk(self):
-        """评估风险"""
-        # 检查投资组合, 看是否吃进了太多的资产，如果持有的加密币资产超过了预定的数量，就只卖出
-        base_asset = self.symbol.replace('USDT', '')
-        base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-        max_base_asset = float(os.getenv('MAX_BASE_ASSET', 10.0))  # Maximum allowed base asset balance
-
-        sell_only = False
-        
-        if base_asset_balance > max_base_asset:
-            msg = f"{base_asset} 存货 {base_asset_balance:.2f} 超过了最大允许值 {max_base_asset:.2f}，只卖出"
-            self.logger.warning(msg)
-            send_telegram_message(msg)
-            sell_only = True
-
-        return sell_only
-    
     def close_position(self, keep_grids=0):
         """平仓函数：全部卖掉"""
         # keep_grids 保留的网格数量
@@ -644,8 +625,7 @@ class DynamicGridTrader:
         self.enable_trading = True
         self.prepare_position(2) # 初始化时，准备2个网格
         self.adjust_grid_parameters(1.0)
-        sell_only = self.evaluate_risk()
-        self.place_grid_orders(sell_only=sell_only)
+        self.place_grid_orders()
 
         while True:
             try:
@@ -715,8 +695,7 @@ class DynamicGridTrader:
                         self.cancel_all_orders()
                         self.prepare_position(2)
                         self.adjust_grid_parameters(adjust_factor)
-                        sell_only = self.evaluate_risk()
-                        self.place_grid_orders(sell_only=sell_only)
+                        self.place_grid_orders()
                     
                 time.sleep(10)
             except KeyboardInterrupt:
