@@ -31,8 +31,10 @@ Have fun!
 
 ## Telegram Commands
 
+```
 adjust - 调整网格
 portfolio - 查看资产组合
 orders - 查看订单
 chase - 手动追高
 close - 手动平仓
+```

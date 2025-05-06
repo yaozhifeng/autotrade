@@ -446,11 +446,12 @@ class DynamicGridTrader:
 
         return sell_only
     
-    def close_position(self):
+    def close_position(self, keep_grids=0):
         """平仓函数：全部卖掉"""
+        # keep_grids 保留的网格数量
         base_asset = self.symbol.replace('USDT', '')
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-        sell_amount = base_asset_balance * 0.99 # 保留1%，避免手续费问题
+        sell_amount = (base_asset_balance - keep_grids * self.quantity) * 0.99 # 保留1%，避免手续费问题
         
         if sell_amount <= 0.01: # 如果卖出数量小于0.01，直接返回
             msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})"
