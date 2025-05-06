@@ -29,9 +29,8 @@ def send_telegram_message(msg):
 class DynamicGridTrader:
     def __init__(self, api_key, api_secret, symbol='LTCUSDT',
                  grid_levels=10, 
-                 quantity_per_grid=0.1,
-                 short_period=7,
-                 long_period=25):
+                 quantity_per_grid=0.1
+                 ):
         """
         初始化动态网格交易机器人
         :param api_key: 币安API密钥
@@ -44,12 +43,17 @@ class DynamicGridTrader:
         self.symbol = symbol
         self.grid_levels = grid_levels
         self.quantity = quantity_per_grid
+
+        # 初始化订单和网格状态
+        self.orders = {}
+        self.current_grid = None
+        self.last_adjustment_time = None
+        self.last_trade_time = None  # Track the time of the last trade
+        self.last_briefing_time = time.time()
         self.last_update_id = None #Last telegram update id
         self.adjustment_factor = 1.0
         self.enable_trading = True
         self.last_check_time = None
-        self.short_period = short_period
-        self.long_period = long_period
         
         # 设置日志
         logging.basicConfig(
@@ -61,12 +65,6 @@ class DynamicGridTrader:
             ]
         )
         self.logger = logging.getLogger(__name__)
-        
-        # 初始化订单和网格状态
-        self.orders = {}
-        self.current_grid = None
-        self.last_adjustment_time = None
-        self.last_trade_time = None  # Track the time of the last trade
         
         # 初始化每日统计数据
         self.daily_stats = {
@@ -80,7 +78,6 @@ class DynamicGridTrader:
             'final_balance': 0.0, # 本周期最终余额
             'final_price': 0.0 # 本周期最终价格
         }
-        self.last_briefing_time = time.time()
 
     def get_current_price(self):
         """获取当前价格"""
@@ -215,8 +212,8 @@ class DynamicGridTrader:
     def calculate_trend(self, df):
         """计算市场趋势"""
         # 使用EMA指标判断趋势
-        ema_short = df['close'].ewm(span=self.short_period, adjust=False).mean()
-        ema_long = df['close'].ewm(span=self.long_period, adjust=False).mean()
+        ema_short = df['close'].ewm(span=7, adjust=False).mean()
+        ema_long = df['close'].ewm(span=25, adjust=False).mean()
         
         # 计算趋势强度
         trend_strength = (ema_short - ema_long) / ema_long
@@ -707,9 +704,7 @@ def get_bot():
         'api_secret': os.getenv('API_SECRET'),
         'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
         'grid_levels': int(os.getenv('GRID_LEVELS', 10)),  # 从环境变量加载网格数量，默认10
-        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
-        'short_period': int(os.getenv('SHORT_PERIOD', 7)),
-        'long_period': int(os.getenv('LONG_PERIOD', 25))
+        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0))   # 每个网格的交易数量
     }
     
     # 创建并运行动态网格交易机器人
