@@ -534,6 +534,7 @@ class DynamicGridTrader:
         """平掉当前网格的现货，停止交易"""
         try:
             self.enable_trading = False
+            self.in_bull_market = False
             self.cancel_all_orders()
             self.close_position()
             self.send_daily_briefing()
