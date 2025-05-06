@@ -649,8 +649,8 @@ class DynamicGridTrader:
                     if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，则平仓止损
                         if self.enable_trading: 
                             self.in_bull_market = False # 标记熊市
-                            self.logger.info("市场趋势向下，触发止损平仓")
-                            send_telegram_message(f"市场趋势向下，触发止损平仓，当前价格: {current_price:.2f} USDT")
+                            self.logger.info("价格下跌超过止损比例，触发止损平仓")
+                            send_telegram_message(f"价格下跌超过止损比例，平仓并停止交易，当前价格: {current_price:.2f} USDT")
                             self.enable_trading = False # 停止交易
                             self.cancel_all_orders()
                             self.close_position()
@@ -668,8 +668,8 @@ class DynamicGridTrader:
                             self.last_briefing_time = time.time()
                         elif not self.in_bull_market: # 之前是熊市，转到牛市交易规则
                             self.in_bull_market = True # 标记牛市
-                            self.logger.info("市场趋势向上，切换到牛市交易规则")
-                            send_telegram_message("市场趋势向上，切换到牛市交易规则")
+                            self.logger.info("熊转牛，切换到正常交易规则")
+                            send_telegram_message("熊转牛，切换到正常交易规则")
                             self.cancel_all_orders()
                             self.prepare_position(4) # 恢复交易时，准备4个网格
                             self.adjust_grid_parameters(1.0)
@@ -678,8 +678,8 @@ class DynamicGridTrader:
                         if self.enable_trading:
                             if self.in_bull_market: #刚从牛市转换到熊市
                                 self.in_bull_market = False # 标记熊市
-                                self.logger.info("市场趋势向下，平仓保留 2 格，继续交易")
-                                send_telegram_message("市场趋势向下，平仓保留 2 格，继续交易")
+                                self.logger.info("牛转熊，平仓保留 2 格，继续交易")
+                                send_telegram_message("牛转熊，平仓保留 2 格，继续交易")
                                 self.cancel_all_orders()
                                 self.close_position(2)
                                 self.adjust_grid_parameters(1.0)
