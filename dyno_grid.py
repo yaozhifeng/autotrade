@@ -653,7 +653,7 @@ class DynamicGridTrader:
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                         # 判断是否需要止损
-                        if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，止损, 停止交易等待价格回升
+                        if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，平仓止损, 停止交易等待价格回升
                             if self.enable_trading: 
                                 self.in_bull_market = False # 标记熊市
                                 self.logger.info("价格下跌超过止损比例，停止交易，等待市场回升")
@@ -661,7 +661,7 @@ class DynamicGridTrader:
                                 self.stop_loss_price = current_price
                                 self.enable_trading = False # 停止交易
                                 self.cancel_all_orders()
-                                # self.close_position()
+                                self.close_position()
                                 self.send_daily_briefing()
                         elif market_trend > 0: # 如果市场趋势向上，牛市交易
                             if not self.in_bull_market: # 之前是熊市，转到牛市交易规则
@@ -682,9 +682,9 @@ class DynamicGridTrader:
                                 send_telegram_message("牛转熊，调整策略，继续交易")
                                 # 调整到熊市交易策略
                                 self.strategy['adjustment_factor'] = 1.0
-                                self.strategy['max_base_asset_grids'] = 6
+                                self.strategy['max_base_asset_grids'] = 8
                                 self.cancel_all_orders()
-                                self.close_position(3) # 平仓保留3个网格
+                                self.close_position(4) # 平仓保留4个网格
                                 self.adjust_grid_parameters()
                                 self.place_grid_orders()
                     else: # not trading
@@ -694,7 +694,7 @@ class DynamicGridTrader:
                             send_telegram_message("价格回升超过止损线，恢复交易")
                             self.cancel_all_orders()
                             self.in_bull_market = market_trend >= 0
-                            self.prepare_position(3)
+                            self.prepare_position(4)
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
 
