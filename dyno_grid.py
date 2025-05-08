@@ -662,7 +662,6 @@ class DynamicGridTrader:
                                 self.enable_trading = False # 停止交易
                                 self.cancel_all_orders()
                                 self.close_position()
-                                self.send_daily_briefing()
                         elif market_trend > 0: # 如果市场趋势向上，牛市交易
                             if not self.in_bull_market: # 之前是熊市，转到牛市交易规则
                                 self.in_bull_market = True # 标记牛市
@@ -688,7 +687,7 @@ class DynamicGridTrader:
                                 self.adjust_grid_parameters()
                                 self.place_grid_orders()
                     else: # not trading
-                        if current_price > self.stop_loss_price: # 如果价格回升到高于止损价格，恢复交易
+                        if current_price > self.stop_loss_price * 1.01: # 如果价格回升到高于止损价格 1%，恢复交易
                             self.enable_trading = True
                             self.logger.info("价格回升超过止损线，恢复交易")
                             send_telegram_message("价格回升超过止损线，恢复交易")
