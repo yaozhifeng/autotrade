@@ -177,6 +177,7 @@ class DynamicGridTrader:
                         self.enable_trading = True
                         self.in_bull_market = self.market_trend >= 0
                         self.cancel_all_orders()
+                        self.prepare_position(2)
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
                     elif text == '/chase': # 手动追高
