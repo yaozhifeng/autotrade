@@ -37,6 +37,15 @@ class DynamicGridTrader:
         self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET', 'False').lower() == 'true')
         self.symbol = symbol
 
+        # 集中策略参数
+        self.strategy = {
+            'grid_levels': 20, # 最多网格数量
+            'quantity_per_grid': 18, # 每个网格的交易数量
+            'grid_gain': 0.005, # 单网格利润, 默认 0.5%
+            'max_base_asset_grids': 10, # 最大持仓网格数量
+            'adjustment_factor': 1.0 # 网格间距调整系数
+        }
+
         # 初始化订单和网格状态
         self.orders = {}
         self.last_adjustment_time = None
@@ -70,15 +79,6 @@ class DynamicGridTrader:
             'last_price': self.get_current_price(), # 上一周期初始价格
             'final_balance': 0.0, # 本周期最终余额
             'final_price': 0.0 # 本周期最终价格
-        }
-
-        # 集中策略参数
-        self.strategy = {
-            'grid_levels': 20, # 最多网格数量
-            'quantity_per_grid': 12, # 每个网格的交易数量
-            'grid_gain': 0.005, # 单网格利润, 默认 0.5%
-            'max_base_asset_grids': 10, # 最大持仓网格数量
-            'adjustment_factor': 1.0 # 网格间距调整系数
         }
 
     def get_current_price(self):
@@ -658,7 +658,6 @@ class DynamicGridTrader:
                             # 恢复交易，并调整交易策略
                             self.enable_trading = True
                             self.strategy['adjustment_factor'] = 1.0
-                            self.strategy['grid_levels'] = 20
                             self.strategy['max_base_asset_grids'] = 10
                             self.prepare_position(4) # 恢复交易时，准备4个网格
                             self.adjust_grid_parameters()
@@ -671,13 +670,12 @@ class DynamicGridTrader:
                             send_telegram_message("熊转牛，切换到正常交易规则")
                             # 调整到牛市交易策略
                             self.strategy['adjustment_factor'] = 1.0
-                            self.strategy['grid_levels'] = 20
                             self.strategy['max_base_asset_grids'] = 10
                             self.cancel_all_orders()
                             self.prepare_position(4) # 恢复交易时，准备4个网格
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
-                    elif market_trend < 0: # 如果市场趋势向下，平仓保留 2 格，继续交易
+                    elif market_trend < 0: # 如果市场趋势向下，平仓保留4个网格，继续交易
                         if self.enable_trading:
                             if self.in_bull_market: #刚从牛市转换到熊市
                                 self.in_bull_market = False # 标记熊市
@@ -685,10 +683,9 @@ class DynamicGridTrader:
                                 send_telegram_message("牛转熊，调整策略，继续交易")
                                 # 调整到熊市交易策略
                                 self.strategy['adjustment_factor'] = 1.0
-                                self.strategy['grid_levels'] = 10 # 网格数量减半
-                                self.strategy['max_base_asset_grids'] = 10
+                                self.strategy['max_base_asset_grids'] = 6
                                 self.cancel_all_orders()
-                                self.close_position(4) # 平仓保留4个网格
+                                self.close_position(3) # 平仓保留3个网格
                                 self.adjust_grid_parameters()
                                 self.place_grid_orders()
 
