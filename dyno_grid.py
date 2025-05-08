@@ -174,6 +174,8 @@ class DynamicGridTrader:
                     elif text.startswith('/adjust'): # 调整网格参数
                         factor = float(text.split(' ')[1]) if len(text.split(' ')) > 1 else 1.0
                         self.strategy['adjustment_factor'] = factor
+                        self.enable_trading = True
+                        self.in_bull_market = self.market_trend >= 0
                         self.cancel_all_orders()
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
