@@ -646,7 +646,7 @@ class DynamicGridTrader:
 
                     if self.enable_trading:
                         # 判断要不要追高, 如果当前没有卖单，不管牛熊，都可以追高
-                        if self.enable_trading and self.get_sell_order_count() == 0:
+                        if self.get_sell_order_count() == 0:
                             send_telegram_message("卖单耗尽，追高")
                             self.cancel_all_orders()
                             self.prepare_position(4)
