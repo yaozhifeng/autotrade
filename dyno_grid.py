@@ -27,37 +27,27 @@ def send_telegram_message(msg):
 
 
 class DynamicGridTrader:
-    def __init__(self, api_key, api_secret, symbol='LTCUSDT',
-                 grid_levels=10, 
-                 quantity_per_grid=0.1,
-                 grid_levels_narrow=4,
-                 ):
+    def __init__(self, api_key, api_secret, symbol='LTCUSDT'):
         """
         初始化动态网格交易机器人
         :param api_key: 币安API密钥
         :param api_secret: 币安API密钥
         :param symbol: 交易对
-        :param grid_levels: 网格数量
-        :param quantity_per_grid: 每个网格的交易数量
         """
         self.client = Client(api_key, api_secret, testnet=os.getenv('TEST_NET', 'False').lower() == 'true')
         self.symbol = symbol
-        self.grid_levels = grid_levels
-        self.quantity = quantity_per_grid
-        self.grid_levels_narrow = grid_levels_narrow
 
         # 初始化订单和网格状态
         self.orders = {}
-        self.current_grid = None
         self.last_adjustment_time = None
         self.last_trade_time = None  # Track the time of the last trade
         self.last_briefing_time = time.time()
         self.last_update_id = None #Last telegram update id
-        self.adjustment_factor = 1.0
-        self.enable_trading = True
         self.last_check_time = None
         self.market_trend = 0
         self.in_bull_market = True # 是否处于牛市
+        self.enable_trading = True # 是否开启交易
+
         # 设置日志
         logging.basicConfig(
             level=logging.INFO,
@@ -80,6 +70,15 @@ class DynamicGridTrader:
             'last_price': self.get_current_price(), # 上一周期初始价格
             'final_balance': 0.0, # 本周期最终余额
             'final_price': 0.0 # 本周期最终价格
+        }
+
+        # 集中策略参数
+        self.strategy = {
+            'grid_levels': 20, # 最多网格数量
+            'quantity_per_grid': 12, # 每个网格的交易数量
+            'grid_gain': 0.005, # 单网格利润, 默认 0.5%
+            'max_base_asset_grids': 10, # 最大持仓网格数量
+            'adjustment_factor': 1.0 # 网格间距调整系数
         }
 
     def get_current_price(self):
@@ -105,10 +104,10 @@ class DynamicGridTrader:
         self.daily_stats['final_balance'] = self.get_total_balance()
         self.daily_stats['final_price'] = self.get_current_price()
 
-        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] / self.quantity if self.daily_stats['buy_orders'] > 0 else 0
-        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] / self.quantity if self.daily_stats['sell_orders'] > 0 else 0
+        avg_buy_price = self.daily_stats['total_buy_price'] / self.daily_stats['buy_orders'] / self.strategy['quantity_per_grid'] if self.daily_stats['buy_orders'] > 0 else 0
+        avg_sell_price = self.daily_stats['total_sell_price'] / self.daily_stats['sell_orders'] / self.strategy['quantity_per_grid'] if self.daily_stats['sell_orders'] > 0 else 0
 
-        gross_margin = (avg_sell_price - avg_buy_price) * self.quantity * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
+        gross_margin = (avg_sell_price - avg_buy_price) * self.strategy['quantity_per_grid'] * min(self.daily_stats['sell_orders'], self.daily_stats['buy_orders'])
         fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * float(os.getenv('FEE_RATE', 0.001))
         net_profit = gross_margin - fee
 
@@ -134,17 +133,12 @@ class DynamicGridTrader:
         buy_sell_threshold_low = int(os.getenv('BUY_SELL_THRESHOLD_LOW', 18))
         buy_sell_threshold_high = int(os.getenv('BUY_SELL_THRESHOLD_HIGH', 36))
 
-        adjustment_factor = self.adjustment_factor
         if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < buy_sell_threshold_low:
-            if self.adjustment_factor >= 1.2:
-                adjustment_factor = 1.0
-            else:
-                adjustment_factor = 0.8
+                self.strategy['adjustment_factor'] = 0.8
         elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > buy_sell_threshold_high:
-            if self.adjustment_factor <= 0.8:
-                adjustment_factor = 1.0
-            else:
-                adjustment_factor = 1.2
+            self.strategy['adjustment_factor'] = 1.2
+        else:
+            self.strategy['adjustment_factor'] = 1.0
 
         # 重置每日统计数据
         last_price = self.daily_stats['initial_price']
@@ -160,9 +154,6 @@ class DynamicGridTrader:
             'final_price': 0.0
         }
         self.last_briefing_time = time.time()
-
-        return adjustment_factor
-
 
     def answer_telegram(self):
         """回答Telegram消息"""
@@ -182,8 +173,9 @@ class DynamicGridTrader:
                         self.check_portfolio()
                     elif text.startswith('/adjust'): # 调整网格参数
                         factor = float(text.split(' ')[1]) if len(text.split(' ')) > 1 else 1.0
+                        self.strategy['adjustment_factor'] = factor
                         self.cancel_all_orders()
-                        self.adjust_grid_parameters(factor)
+                        self.adjust_grid_parameters()
                         self.place_grid_orders()
                     elif text == '/chase': # 手动追高
                         self.chase_grid()
@@ -247,31 +239,27 @@ class DynamicGridTrader:
         self.market_trend = trend
         return trend
 
-    def adjust_grid_parameters(self, adjust_factor=1.0):
+    def adjust_grid_parameters(self):
         """调整网格参数"""
+        # 计算当前价格上下各一半网格价格
         try:
             # 使用当前价格作为市场数据
             current_price = float(self.client.get_symbol_ticker(symbol=self.symbol)['price'])
             self.current_grid = []
             
             # 根据系数调整网格间距
-            self.adjustment_factor = adjust_factor
-            grid_gain = float(os.getenv('GRID_GAIN', 0.005)) * adjust_factor  #  单网格利润, 默认 0.5%, 并按系数调整
-            self.grid_gap = grid_gain * current_price
+            grid_gap = self.strategy['grid_gain'] * current_price * self.strategy['adjustment_factor']  #  单网格利润, 并按系数调整
+            self.grid_gap = grid_gap
 
-            # 根据市场趋势设置网格数量
-            if self.market_trend >= 0:
-                grids = self.grid_levels//2
-            else:
-                grids = self.grid_levels_narrow//2
+            grids = self.strategy['grid_levels']//2
 
             for i in range(grids):
-                self.current_grid.append(current_price + self.grid_gap * (i+1))
-                self.current_grid.append(current_price - self.grid_gap * (i+1))
+                self.current_grid.append(current_price + grid_gap * (i+1))
+                self.current_grid.append(current_price - grid_gap * (i+1))
             
-            profit_per_grid_percent = (grid_gain - float(os.getenv('FEE_RATE', 0.001))*2) * 100  # 每格利润（扣除手续费）
+            profit_per_grid_percent = (self.strategy['grid_gain'] - float(os.getenv('FEE_RATE', 0.001))*2) * 100  # 每格利润（扣除手续费）
 
-            msg = f"调整网格(系数 {adjust_factor:.1f}):\n"
+            msg = f"调整网格(系数 {self.strategy['adjustment_factor']:.1f}):\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
             msg += f"新网格范围: {min(self.current_grid):.2f} - {max(self.current_grid):.2f} USDT\n"
             msg += f"网格数量: {grids*2}\n"
@@ -316,8 +304,8 @@ class DynamicGridTrader:
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
 
         # Calculate the max buy orders we can place, based on the max_base_asset to avoid buying too much
-        max_base_asset = float(os.getenv('MAX_BASE_ASSET', 10.0))  # Maximum allowed base asset balance
-        max_buy_orders = int((max_base_asset-base_asset_balance) / self.quantity)  # Maximum number of buy orders we can place
+        max_base_asset = self.strategy['max_base_asset_grids'] * self.strategy['quantity_per_grid']  # Maximum allowed base asset balance
+        max_buy_orders = int((max_base_asset - base_asset_balance) / self.strategy['quantity_per_grid'])  # Maximum number of buy orders we can place
 
         buy_orders_placed = 0
         sell_orders_placed = 0
@@ -325,7 +313,7 @@ class DynamicGridTrader:
         # Place buy orders from highest price to lowest price
         for price in sorted(buy_prices, reverse=True):
             try:
-                required_usdt = self.quantity * price
+                required_usdt = self.strategy['quantity_per_grid'] * price
                 if usdt_balance >= required_usdt and buy_orders_placed < max_buy_orders:
                     # Place buy order
                     order = self.client.create_order(
@@ -333,7 +321,7 @@ class DynamicGridTrader:
                         side=SIDE_BUY,
                         type=ORDER_TYPE_LIMIT,
                         timeInForce=TIME_IN_FORCE_GTC,
-                        quantity=self.quantity,
+                        quantity=self.strategy['quantity_per_grid'],
                         price=f"{price:.2f}"
                         )
                     self.orders[order['orderId']] = {
@@ -351,14 +339,14 @@ class DynamicGridTrader:
         # Place sell orders from lowest price to highest price
         for price in sorted(sell_prices):
             try:
-                if base_asset_balance >= self.quantity:
+                if base_asset_balance >= self.strategy['quantity_per_grid']:
                     # Place sell order
                     order = self.client.create_order(
                         symbol=self.symbol,
                         side=SIDE_SELL,
                         type=ORDER_TYPE_LIMIT,
                         timeInForce=TIME_IN_FORCE_GTC,
-                        quantity=self.quantity,
+                        quantity=self.strategy['quantity_per_grid'],
                         price=f"{price:.2f}"
                         )
                     self.orders[order['orderId']] = {
@@ -367,7 +355,7 @@ class DynamicGridTrader:
                         'status': 'OPEN'
                         }
                     self.logger.info(f"下单成功: {order['side']} {order['price']} USDT, 数量: {order['origQty']}")
-                    base_asset_balance -= self.quantity  # Update available base asset balance
+                    base_asset_balance -= self.strategy['quantity_per_grid']  # Update available base asset balance
                     sell_orders_placed += 1
                 else:
                     self.logger.warning(f"卖单未放置 {price:.2f} USDT")
@@ -407,6 +395,11 @@ class DynamicGridTrader:
         """获取卖单数量"""
         sell_orders = [order for order in self.orders.values() if order['side'] == 'SELL']
         return len(sell_orders)
+    
+    def get_buy_order_count(self):
+        """获取买单数量"""
+        buy_orders = [order for order in self.orders.values() if order['side'] == 'BUY']
+        return len(buy_orders)
 
     def show_orders(self):
         """显示当前订单"""
@@ -442,7 +435,7 @@ class DynamicGridTrader:
         # keep_grids 保留的网格数量
         base_asset = self.symbol.replace('USDT', '')
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-        sell_amount = (base_asset_balance - keep_grids * self.quantity) * 0.99 # 保留1%，避免手续费问题
+        sell_amount = (base_asset_balance - keep_grids * self.strategy['quantity_per_grid']) * 0.99 # 保留1%，避免手续费问题
         
         if sell_amount <= 0.01: # 如果卖出数量小于0.01，直接返回
             msg = f"无需平仓，当前{base_asset}持仓({base_asset_balance:.6f})"
@@ -476,7 +469,7 @@ class DynamicGridTrader:
         """
         base_asset = self.symbol.replace('USDT', '')
         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-        target_amount = self.quantity * grid_count
+        target_amount = self.strategy['quantity_per_grid'] * grid_count
         
         if base_asset_balance >= target_amount:
             msg = f"无需买入，当前{base_asset}持仓({base_asset_balance:.6f})已满足{grid_count}个网格({target_amount:.6f})"
@@ -560,10 +553,10 @@ class DynamicGridTrader:
                     # Update daily stats
                     if order_info['side'] == 'BUY':
                         self.daily_stats['buy_orders'] += 1
-                        self.daily_stats['total_buy_price'] += order_info['price'] * self.quantity
+                        self.daily_stats['total_buy_price'] += order_info['price'] * self.strategy['quantity_per_grid']
                     else:
                         self.daily_stats['sell_orders'] += 1
-                        self.daily_stats['total_sell_price'] += order_info['price'] * self.quantity
+                        self.daily_stats['total_sell_price'] += order_info['price'] * self.strategy['quantity_per_grid']
                     
                     # 放置反向订单
                     new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
@@ -572,14 +565,14 @@ class DynamicGridTrader:
                     # Check balance before placing reverse order
                     if new_side == 'BUY':
                         usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
-                        required_usdt = self.quantity * new_price
+                        required_usdt = self.strategy['quantity_per_grid'] * new_price
                         if usdt_balance >= required_usdt:
                             new_order = self.client.create_order(
                                 symbol=self.symbol,
                                 side=new_side,
                                 type=ORDER_TYPE_LIMIT,
                                 timeInForce=TIME_IN_FORCE_GTC,
-                                quantity=self.quantity,
+                                quantity=self.strategy['quantity_per_grid'],
                                 price=f"{new_price:.2f}"
                             )
                             self.orders[new_order['orderId']] = {
@@ -593,13 +586,13 @@ class DynamicGridTrader:
                     else:
                         base_asset = self.symbol.replace('USDT', '')
                         base_asset_balance = float(self.client.get_asset_balance(asset=base_asset)['free'])
-                        if base_asset_balance >= self.quantity:
+                        if base_asset_balance >= self.strategy['quantity_per_grid']:
                             new_order = self.client.create_order(
                                 symbol=self.symbol,
                                 side=new_side,
                                 type=ORDER_TYPE_LIMIT,
                                 timeInForce=TIME_IN_FORCE_GTC,
-                                quantity=self.quantity,
+                                quantity=self.strategy['quantity_per_grid'],
                                 price=f"{new_price:.2f}"
                             )
                             self.orders[new_order['orderId']] = {
@@ -620,12 +613,14 @@ class DynamicGridTrader:
         self.logger.info(f"交易对: {self.symbol}")
         send_telegram_message(f"启动动态网格交易机器人... 交易对: {self.symbol}")
 
+        self.cancel_all_orders() # 取消可能遗留的所有未成交订单
+
         # 初始化网格参数
         market_trend = self.get_market_trend()
         self.in_bull_market = market_trend >= 0
         self.enable_trading = True
         self.prepare_position(2) # 初始化时，准备2个网格
-        self.adjust_grid_parameters(1.0)
+        self.adjust_grid_parameters()
         self.place_grid_orders()
 
         while True:
@@ -660,9 +655,13 @@ class DynamicGridTrader:
                             self.in_bull_market = True # 标记牛市
                             self.logger.info("市场趋势向上，恢复交易")
                             send_telegram_message("市场趋势向上，恢复交易")
+                            # 恢复交易，并调整交易策略
                             self.enable_trading = True
+                            self.strategy['adjustment_factor'] = 1.0
+                            self.strategy['grid_levels'] = 20
+                            self.strategy['max_base_asset_grids'] = 10
                             self.prepare_position(4) # 恢复交易时，准备4个网格
-                            self.adjust_grid_parameters(1.0)
+                            self.adjust_grid_parameters()
                             self.place_grid_orders()
                             self.daily_stats['last_price'] = self.daily_stats['initial_price'] = current_price
                             self.last_briefing_time = time.time()
@@ -670,32 +669,42 @@ class DynamicGridTrader:
                             self.in_bull_market = True # 标记牛市
                             self.logger.info("熊转牛，切换到正常交易规则")
                             send_telegram_message("熊转牛，切换到正常交易规则")
+                            # 调整到牛市交易策略
+                            self.strategy['adjustment_factor'] = 1.0
+                            self.strategy['grid_levels'] = 20
+                            self.strategy['max_base_asset_grids'] = 10
                             self.cancel_all_orders()
                             self.prepare_position(4) # 恢复交易时，准备4个网格
-                            self.adjust_grid_parameters(1.0)
+                            self.adjust_grid_parameters()
                             self.place_grid_orders()
                     elif market_trend < 0: # 如果市场趋势向下，平仓保留 2 格，继续交易
                         if self.enable_trading:
                             if self.in_bull_market: #刚从牛市转换到熊市
                                 self.in_bull_market = False # 标记熊市
-                                self.logger.info("牛转熊，平仓保留 2 格，继续交易")
-                                send_telegram_message("牛转熊，平仓保留 2 格，继续交易")
+                                self.logger.info("牛转熊，调整策略，继续交易")
+                                send_telegram_message("牛转熊，调整策略，继续交易")
+                                # 调整到熊市交易策略
+                                self.strategy['adjustment_factor'] = 1.0
+                                self.strategy['grid_levels'] = 10 # 网格数量减半
+                                self.strategy['max_base_asset_grids'] = 10
                                 self.cancel_all_orders()
-                                self.close_position(2)
-                                self.adjust_grid_parameters(1.0)
+                                self.close_position(4) # 平仓保留4个网格
+                                self.adjust_grid_parameters()
                                 self.place_grid_orders()
-                    # 判断要不要追高
-                    if self.enable_trading and self.in_bull_market and self.get_sell_order_count() == 0:
+
+                    # 判断要不要追高, 如果当前没有卖单，不管牛熊，都可以追高
+                    if self.enable_trading and self.get_sell_order_count() == 0:
+                        send_telegram_message("卖单耗尽，追高")
                         self.chase_grid()
 
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
-                    adjust_factor = self.send_daily_briefing()
-                    if (not adjust_factor == self.adjustment_factor or self.should_adjust_grid()):
+                    self.send_daily_briefing()
+                    if (self.enable_trading and self.should_adjust_grid()):
                         self.cancel_all_orders()
                         self.prepare_position(2)
-                        self.adjust_grid_parameters(adjust_factor)
+                        self.adjust_grid_parameters()
                         self.place_grid_orders()
                     
                 time.sleep(10)
@@ -715,10 +724,7 @@ def get_bot():
     config = {
         'api_key': os.getenv('API_KEY'),
         'api_secret': os.getenv('API_SECRET'),
-        'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT'),  # 从环境变量加载交易对，默认LTCUSDT
-        'grid_levels': int(os.getenv('GRID_LEVELS', 10)),  # 从环境变量加载网格数量，默认10
-        'quantity_per_grid': float(os.getenv('QUANTITY_PER_GRID', 1.0)),   # 每个网格的交易数量
-        'grid_levels_narrow': int(os.getenv('GRID_LEVELS_NARROW', 4))  # 从环境变量加载窄网格数量，默认4
+        'symbol': os.getenv('TRADE_SYMBOL', 'LTCUSDT')  # 从环境变量加载交易对，默认LTCUSDT
     }
     
     # 创建并运行动态网格交易机器人
