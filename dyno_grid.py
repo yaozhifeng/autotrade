@@ -120,10 +120,11 @@ class DynamicGridTrader:
             f"卖单数量: {self.daily_stats['sell_orders']}\n"
             f"平均买入价格: {avg_buy_price:.2f} USDT\n"
             f"平均卖出价格: {avg_sell_price:.2f} USDT\n"
-            f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
-            f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
             f"初始价格: {self.daily_stats['initial_price']:.2f} USDT\n"
             f"最终价格: {self.daily_stats['final_price']:.2f} USDT\n"
+            f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
+            f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
+            f"资产增值: {(self.daily_stats['final_balance'] - self.daily_stats['initial_balance']):.2f} USDT\n"
             f"统计周期: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         send_telegram_message(briefing_msg)
