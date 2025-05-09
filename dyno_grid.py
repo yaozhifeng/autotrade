@@ -39,10 +39,10 @@ class DynamicGridTrader:
 
         # 集中策略参数
         self.strategy = {
-            'grid_levels': 20, # 最多网格数量
-            'quantity_per_grid': 18, # 每个网格的交易数量
-            'grid_gain': 0.005, # 单网格利润, 默认 0.5%
-            'max_base_asset_grids': 10, # 最大持仓网格数量
+            'grid_levels': int(os.getenv('GRID_LEVELS', 20)), # 最多网格数量
+            'quantity_per_grid': int(os.getenv('QUANTITY_PER_GRID', 18)), # 每个网格的交易数量
+            'grid_gain': float(os.getenv('GRID_GAIN', 0.005)), # 单网格利润, 默认 0.5%
+            'max_base_asset_grids': int(os.getenv('MAX_BASE_ASSET_GRIDS', 10)), # 最大持仓网格数量
             'adjustment_factor': 1.0 # 网格间距调整系数
         }
 
@@ -674,7 +674,7 @@ class DynamicGridTrader:
                                 self.prepare_position(4) # 恢复交易时，准备4个网格
                                 self.adjust_grid_parameters()
                                 self.place_grid_orders()
-                        elif market_trend < 0: # 如果市场趋势向下，平仓保留3个网格，继续交易
+                        elif market_trend < 0: # 如果市场趋势向下，平仓保留少量网格，继续交易
                             if self.in_bull_market: #刚从牛市转换到熊市
                                 self.in_bull_market = False # 标记熊市
                                 self.logger.info("牛转熊，调整策略，继续交易")
