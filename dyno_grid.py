@@ -265,8 +265,6 @@ class DynamicGridTrader:
 
             msg = f"调整网格(系数 {self.strategy['adjustment_factor']:.1f}):\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
-            msg += f"新网格范围: {min(self.current_grid):.2f} - {max(self.current_grid):.2f} USDT\n"
-            msg += f"网格数量: {grids*2}\n"
             msg += f"网格间隔: {self.grid_gap:.2f} USDT\n"
             msg += f"每格利润: {profit_per_grid_percent:.2f}%"
             self.logger.info(msg)
