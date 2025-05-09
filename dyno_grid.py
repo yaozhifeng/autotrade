@@ -648,9 +648,17 @@ class DynamicGridTrader:
                     if self.enable_trading:
                         # 判断要不要追高, 如果当前没有卖单，不管牛熊，都可以追高
                         if self.get_sell_order_count() == 0:
+                            self.logger.info("卖单耗尽，追高")
                             send_telegram_message("卖单耗尽，追高")
                             self.cancel_all_orders()
-                            self.prepare_position(4)
+                            self.prepare_position(4) # 追高时，准备4个网格
+                            self.adjust_grid_parameters()
+                            self.place_grid_orders()
+                        elif self.get_buy_order_count() == 0:
+                            self.logger.info("买单耗尽，追低")
+                            send_telegram_message("买单耗尽，追低")
+                            self.cancel_all_orders()
+                            self.close_position(4) # 平仓保留4个网格
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                         # 判断是否需要止损
@@ -702,11 +710,6 @@ class DynamicGridTrader:
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
                 if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
                     self.send_daily_briefing()
-                    if (self.enable_trading and self.should_adjust_grid()):
-                        self.cancel_all_orders()
-                        self.prepare_position(2)
-                        self.adjust_grid_parameters()
-                        self.place_grid_orders()
                     
                 time.sleep(10)
             except KeyboardInterrupt:
