@@ -178,7 +178,7 @@ class DynamicGridTrader:
                         self.enable_trading = True
                         self.in_bull_market = self.market_trend >= 0
                         self.cancel_all_orders()
-                        self.prepare_position(2)
+                        self.prepare_position(4)
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
                     elif text == '/chase': # 手动追高
@@ -703,15 +703,8 @@ class DynamicGridTrader:
                                 self.adjust_grid_parameters()
                                 self.place_grid_orders()
                     else: # not trading
-                        if current_price > self.stop_loss_price * 1.01: # 如果价格回升到高于止损价格 1%，恢复交易
-                            self.enable_trading = True
-                            self.logger.info("价格回升超过止损线，恢复交易")
-                            send_telegram_message("价格回升超过止损线，恢复交易")
-                            self.cancel_all_orders()
-                            self.in_bull_market = market_trend >= 0
-                            self.prepare_position(4)
-                            self.adjust_grid_parameters()
-                            self.place_grid_orders()
+                        # 不自动重启交易，可以用 /adjust 指令重启
+                        pass
 
                 # 检查是否需要发送每日简报
                 briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
