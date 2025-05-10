@@ -609,6 +609,12 @@ class DynamicGridTrader:
             except Exception as e:
                 self.logger.error(f"检查订单状态失败: {str(e)}")
 
+    def calc_drawdown(self, N):
+        # 计算N个网格的回撤
+        Q = self.strategy['quantity_per_grid']
+        delta_P = self.grid_gap
+        return Q * delta_P * N * (N - 1) / 2
+
     def run(self):
         """运行动态网格交易机器人"""
         self.logger.info("启动动态网格交易机器人...")
