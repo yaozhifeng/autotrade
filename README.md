@@ -37,4 +37,5 @@ portfolio - 查看资产组合
 orders - 查看订单
 chase - 手动追高
 close - 手动平仓
+restart - 重新启动交易
 ```
