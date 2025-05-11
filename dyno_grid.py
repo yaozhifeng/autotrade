@@ -324,6 +324,11 @@ class DynamicGridTrader:
 
         buy_orders_placed = 0
         sell_orders_placed = 0
+        # Check if consecutive buy orders exceed threshold
+        if self.consecutive_buy_orders >= 5:
+            self.logger.warning(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
+            send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
+            buy_prices = []  # Clear buy prices to prevent placing buy orders
 
         # Place buy orders from highest price to lowest price
         for price in sorted(buy_prices, reverse=True):
