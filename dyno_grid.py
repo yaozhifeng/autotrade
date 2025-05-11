@@ -325,10 +325,10 @@ class DynamicGridTrader:
         buy_orders_placed = 0
         sell_orders_placed = 0
         # Check if consecutive buy orders exceed threshold
-        # if self.consecutive_buy_orders >= 5:
-        #     self.logger.warning(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
-        #     send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
-        #     buy_prices = []  # Clear buy prices to prevent placing buy orders
+        if self.consecutive_buy_orders >= 5:
+            self.logger.warning(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
+            send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
+            buy_prices = []  # Clear buy prices to prevent placing buy orders
 
         # Place buy orders from highest price to lowest price
         for price in sorted(buy_prices, reverse=True):
@@ -696,7 +696,6 @@ class DynamicGridTrader:
                 # 回答Telegram消息
                 self.answer_telegram()
 
-                # 检查是否突破现有网格，如果突破，则追高或追低，确保网格覆盖
                 if self.enable_trading:
                     if self.get_sell_order_count() == 0:
                         # 判断要不要追高, 如果当前没有卖单，不管牛熊，都可以追高
@@ -704,14 +703,6 @@ class DynamicGridTrader:
                         send_telegram_message("卖单耗尽，追高")
                         self.cancel_all_orders()
                         self.prepare_position(4) # 追高时，准备4个网格
-                        self.adjust_grid_parameters()
-                        self.place_grid_orders()
-                    elif self.get_buy_order_count() == 0:
-                        # 买单耗尽，追低
-                        self.logger.info("买单耗尽，追低")
-                        send_telegram_message("买单耗尽，追低")
-                        self.cancel_all_orders()
-                        self.close_position(4) # 平仓保留4个网格
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
 
@@ -728,16 +719,25 @@ class DynamicGridTrader:
                     if self.enable_trading:
                         # 判断是否需要止损
                         if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，平仓止损, 停止交易等待价格回升
-                            if self.enable_trading: 
-                                self.in_bull_market = False # 标记熊市
-                                self.logger.info("价格下跌超过止损比例，停止交易，等待市场回升")
-                                send_telegram_message(f"价格下跌超过止损比例，停止交易，当前价格: {current_price:.2f} USDT")
-                                self.stop_loss_price = current_price
-                                self.enable_trading = False # 停止交易
-                                self.cancel_all_orders()
-                                self.close_position()
-                                send_telegram_message(f"以停止交易，需手动恢复！")
-                        elif market_trend > 0: # 如果市场趋势向上，牛市交易
+                            self.in_bull_market = False # 标记熊市
+                            self.logger.info("价格下跌超过止损比例，停止交易，等待市场回升")
+                            send_telegram_message(f"价格下跌超过止损比例，停止交易，当前价格: {current_price:.2f} USDT")
+                            self.stop_loss_price = current_price
+                            self.enable_trading = False # 停止交易
+                            self.cancel_all_orders()
+                            self.close_position()
+                            send_telegram_message(f"以停止交易，需手动恢复！")
+                        # 追低检查每半小时进行一次
+                        elif self.get_buy_order_count() == 0 and self.should_adjust_grid():
+                            # 买单耗尽，且需要调整网格(超过 2 个网格)，则追低
+                            self.logger.info("买单耗尽，追低")
+                            send_telegram_message("买单耗尽，追低")
+                            self.cancel_all_orders()
+                            self.close_position(4) # 平仓保留4个网格
+                            self.adjust_grid_parameters()
+                            self.place_grid_orders()
+                        # 市场趋势判断，暂时不调整交易策略
+                        if market_trend > 0: # 如果市场趋势向上，牛市交易
                             if not self.in_bull_market: # 之前是熊市，转到牛市交易规则
                                 self.in_bull_market = True # 标记牛市
                                 self.logger.info("熊转牛，继续交易")
@@ -747,6 +747,7 @@ class DynamicGridTrader:
                                 self.in_bull_market = False # 标记熊市
                                 self.logger.info("牛转熊，继续交易")
                                 send_telegram_message("牛转熊，继续交易")
+
                     else: # not trading
                         # 不自动重启交易，可以用 /adjust 指令重启
                         pass
