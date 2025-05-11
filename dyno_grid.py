@@ -81,6 +81,11 @@ class DynamicGridTrader:
             'final_balance': 0.0, # 本周期最终余额
             'final_price': 0.0 # 本周期最终价格
         }
+        # 连续买卖单跟踪
+        self.consecutive_buy_orders = 0   # 连续买单数
+        self.consecutive_sell_orders = 0  # 连续卖单数
+        self.max_consecutive_buy_orders = 0   # 最大连续买单数
+        self.max_consecutive_sell_orders = 0  # 最大连续卖单数
 
     def get_current_price(self):
         """获取当前价格"""
@@ -126,7 +131,9 @@ class DynamicGridTrader:
             f"最终价格: {self.daily_stats['final_price']:.2f} USDT\n"
             f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
             f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
-            f"统计周期: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"最大连续买单: {self.max_consecutive_buy_orders}\n"
+            f"最大连续卖单: {self.max_consecutive_sell_orders}\n"
+            f"统计周期: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         )
         send_telegram_message(briefing_msg)
         self.logger.info(briefing_msg)
@@ -156,6 +163,9 @@ class DynamicGridTrader:
             'final_price': 0.0
         }
         self.last_briefing_time = time.time()
+        # 重置最大连续买卖单数
+        self.max_consecutive_buy_orders = 0
+        self.max_consecutive_sell_orders = 0
 
     def answer_telegram(self):
         """回答Telegram消息"""
@@ -559,9 +569,19 @@ class DynamicGridTrader:
                     if order_info['side'] == 'BUY':
                         self.daily_stats['buy_orders'] += 1
                         self.daily_stats['total_buy_price'] += order_info['price'] * self.strategy['quantity_per_grid']
+                        # 连续买单+1，卖单归零
+                        self.consecutive_buy_orders += 1
+                        self.consecutive_sell_orders = 0
+                        if self.consecutive_buy_orders > self.max_consecutive_buy_orders:
+                            self.max_consecutive_buy_orders = self.consecutive_buy_orders
                     else:
                         self.daily_stats['sell_orders'] += 1
                         self.daily_stats['total_sell_price'] += order_info['price'] * self.strategy['quantity_per_grid']
+                        # 连续卖单+1，买单归零
+                        self.consecutive_sell_orders += 1
+                        self.consecutive_buy_orders = 0
+                        if self.consecutive_sell_orders > self.max_consecutive_sell_orders:
+                            self.max_consecutive_sell_orders = self.consecutive_sell_orders
                     
                     # 放置反向订单
                     new_side = 'SELL' if order_info['side'] == 'BUY' else 'BUY'
