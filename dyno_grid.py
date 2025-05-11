@@ -325,10 +325,10 @@ class DynamicGridTrader:
         buy_orders_placed = 0
         sell_orders_placed = 0
         # Check if consecutive buy orders exceed threshold
-        if self.consecutive_buy_orders >= 5:
-            self.logger.warning(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
-            send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
-            buy_prices = []  # Clear buy prices to prevent placing buy orders
+        # if self.consecutive_buy_orders >= 5:
+        #     self.logger.warning(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
+        #     send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，暂停买单")
+        #     buy_prices = []  # Clear buy prices to prevent placing buy orders
 
         # Place buy orders from highest price to lowest price
         for price in sorted(buy_prices, reverse=True):
@@ -710,14 +710,6 @@ class DynamicGridTrader:
                         # 买单耗尽，追低
                         self.logger.info("买单耗尽，追低")
                         send_telegram_message("买单耗尽，追低")
-                        self.cancel_all_orders()
-                        self.close_position(4) # 平仓保留4个网格
-                        self.adjust_grid_parameters()
-                        self.place_grid_orders()
-                    elif self.consecutive_buy_orders >= 5:
-                        # 检查连续买单数量，如果超过5，立即调整网格
-                        self.logger.info(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，立即调整网格")
-                        send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，立即调整网格")
                         self.cancel_all_orders()
                         self.close_position(4) # 平仓保留4个网格
                         self.adjust_grid_parameters()
