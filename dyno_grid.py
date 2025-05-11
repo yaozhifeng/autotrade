@@ -698,8 +698,8 @@ class DynamicGridTrader:
 
                 # 检查是否突破现有网格，如果突破，则追高或追低，确保网格覆盖
                 if self.enable_trading:
-                    # 判断要不要追高, 如果当前没有卖单，不管牛熊，都可以追高
                     if self.get_sell_order_count() == 0:
+                        # 判断要不要追高, 如果当前没有卖单，不管牛熊，都可以追高
                         self.logger.info("卖单耗尽，追高")
                         send_telegram_message("卖单耗尽，追高")
                         self.cancel_all_orders()
@@ -707,8 +707,17 @@ class DynamicGridTrader:
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
                     elif self.get_buy_order_count() == 0:
+                        # 买单耗尽，追低
                         self.logger.info("买单耗尽，追低")
                         send_telegram_message("买单耗尽，追低")
+                        self.cancel_all_orders()
+                        self.close_position(4) # 平仓保留4个网格
+                        self.adjust_grid_parameters()
+                        self.place_grid_orders()
+                    elif self.consecutive_buy_orders >= 5:
+                        # 检查连续买单数量，如果超过5，立即调整网格
+                        self.logger.info(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，立即调整网格")
+                        send_telegram_message(f"连续买单数量({self.consecutive_buy_orders})超过阈值(5)，立即调整网格")
                         self.cancel_all_orders()
                         self.close_position(4) # 平仓保留4个网格
                         self.adjust_grid_parameters()
