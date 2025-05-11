@@ -514,7 +514,7 @@ class DynamicGridTrader:
         """追高，买入两个网格的现货，并重新调整网络"""
         try:
             self.cancel_all_orders() # 取消所有未成交订单
-            self.prepare_position(2)  # 准备两个网格的现货
+            self.prepare_position(4)  # 准备两个网格的现货
             # 调整网格参数
             self.adjust_grid_parameters()
             self.place_grid_orders()
@@ -627,7 +627,7 @@ class DynamicGridTrader:
         market_trend = self.get_market_trend()
         self.in_bull_market = market_trend >= 0
         self.enable_trading = True
-        self.prepare_position(2) # 初始化时，准备2个网格
+        self.prepare_position(4) # 初始化时，准备4个网格
         self.adjust_grid_parameters()
         self.place_grid_orders()
 
@@ -678,30 +678,17 @@ class DynamicGridTrader:
                                 self.enable_trading = False # 停止交易
                                 self.cancel_all_orders()
                                 self.close_position()
+                                send_telegram_message(f"以停止交易，需手动恢复！")
                         elif market_trend > 0: # 如果市场趋势向上，牛市交易
                             if not self.in_bull_market: # 之前是熊市，转到牛市交易规则
                                 self.in_bull_market = True # 标记牛市
-                                self.logger.info("熊转牛，切换到正常交易规则")
-                                send_telegram_message("熊转牛，切换到正常交易规则")
-                                # 调整到牛市交易策略
-                                self.strategy['adjustment_factor'] = 1.0
-                                self.strategy['max_base_asset_grids'] = 10
-                                self.cancel_all_orders()
-                                self.prepare_position(4) # 恢复交易时，准备4个网格
-                                self.adjust_grid_parameters()
-                                self.place_grid_orders()
+                                self.logger.info("熊转牛，继续交易")
+                                send_telegram_message("熊转牛，继续交易")
                         elif market_trend < 0: # 如果市场趋势向下，平仓保留少量网格，继续交易
                             if self.in_bull_market: #刚从牛市转换到熊市
                                 self.in_bull_market = False # 标记熊市
-                                self.logger.info("牛转熊，调整策略，继续交易")
-                                send_telegram_message("牛转熊，调整策略，继续交易")
-                                # 调整到熊市交易策略
-                                self.strategy['adjustment_factor'] = 1.0
-                                self.strategy['max_base_asset_grids'] = 8
-                                self.cancel_all_orders()
-                                self.close_position(4) # 平仓保留4个网格
-                                self.adjust_grid_parameters()
-                                self.place_grid_orders()
+                                self.logger.info("牛转熊，继续交易")
+                                send_telegram_message("牛转熊，继续交易")
                     else: # not trading
                         # 不自动重启交易，可以用 /adjust 指令重启
                         pass
