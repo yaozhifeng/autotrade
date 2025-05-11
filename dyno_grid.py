@@ -69,14 +69,15 @@ class DynamicGridTrader:
         self.logger = logging.getLogger(__name__)
         
         # 初始化每日统计数据
+        price = self.get_current_price()
         self.daily_stats = {
             'buy_orders': 0,
             'sell_orders': 0,
             'total_buy_price': 0.0,
             'total_sell_price': 0.0,
             'initial_balance': self.get_total_balance(), # 本周期初始余额
-            'initial_price': self.get_current_price(), # 本周期初始价格
-            'last_price': self.get_current_price(), # 上一周期初始价格
+            'initial_price': price, # 本周期初始价格
+            'last_price': price, # 上一周期初始价格
             'final_balance': 0.0, # 本周期最终余额
             'final_price': 0.0 # 本周期最终价格
         }
@@ -185,6 +186,8 @@ class DynamicGridTrader:
                         self.chase_grid()
                     elif text == '/close': # 手动平仓
                         self.close_grid()
+                    elif text == '/restart': # 重启交易
+                        self.restart_trading()
         except Exception as e:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
@@ -614,6 +617,35 @@ class DynamicGridTrader:
         Q = self.strategy['quantity_per_grid']
         delta_P = self.grid_gap
         return Q * delta_P * N * (N - 1) / 2
+
+    def restart_trading(self):
+        """重启交易"""
+        self.logger.info("重启交易")
+        send_telegram_message("重启交易")
+        self.enable_trading = True
+
+        market_trend = self.get_market_trend()
+        self.in_bull_market = market_trend >= 0
+        self.last_check_time = None
+        self.last_briefing_time = None
+
+        price = self.get_current_price()
+        self.daily_stats = {
+            'buy_orders': 0,
+            'sell_orders': 0,
+            'total_buy_price': 0.0,
+            'total_sell_price': 0.0,
+            'initial_balance': self.get_total_balance(), # 本周期初始余额
+            'initial_price': price, # 本周期初始价格
+            'last_price': price, # 上一周期初始价格
+            'final_balance': 0.0, # 本周期最终余额
+            'final_price': 0.0 # 本周期最终价格
+        }
+        
+        self.cancel_all_orders()
+        self.prepare_position(4)
+        self.adjust_grid_parameters()
+        self.place_grid_orders()
 
     def run(self):
         """运行动态网格交易机器人"""
