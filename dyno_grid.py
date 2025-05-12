@@ -138,17 +138,6 @@ class DynamicGridTrader:
         send_telegram_message(briefing_msg)
         self.logger.info(briefing_msg)
 
-        # 根据上一周期买卖次数，计算下一周期的网格宽度调整系数
-        buy_sell_threshold_low = int(os.getenv('BUY_SELL_THRESHOLD_LOW', 18))
-        buy_sell_threshold_high = int(os.getenv('BUY_SELL_THRESHOLD_HIGH', 36))
-
-        if (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) < buy_sell_threshold_low:
-                self.strategy['adjustment_factor'] = 0.8
-        elif (self.daily_stats['buy_orders'] + self.daily_stats['sell_orders']) > buy_sell_threshold_high:
-            self.strategy['adjustment_factor'] = 1.2
-        else:
-            self.strategy['adjustment_factor'] = 1.0
-
         # 重置每日统计数据
         last_price = self.daily_stats['initial_price']
         self.daily_stats = {
