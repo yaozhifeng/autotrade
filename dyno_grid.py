@@ -201,15 +201,15 @@ class DynamicGridTrader:
         except Exception as e:
             self.logger.error(f"回答Telegram消息失败: {str(e)}")
 
-    def get_market_data(self):
-        """获取市场数据, 1小时K线"""
+    def get_market_data(self, interval='1h'):
+        """获取市场数据, 默认间隔1小时，可以传入其他间隔，如15m, 1h, 4h, 1d"""
         end_time = datetime.now()
-        start_time = end_time - timedelta(hours=72) # 获取72小时数据
+        start_time = end_time - timedelta(hours=48) # 获取48小时数据
         
         # 获取K线数据
         klines = self.client.get_historical_klines(
             self.symbol,
-            Client.KLINE_INTERVAL_1HOUR,
+            interval,
             start_time.strftime("%Y-%m-%d %H:%M:%S"),
             end_time.strftime("%Y-%m-%d %H:%M:%S")
         )
@@ -218,6 +218,9 @@ class DynamicGridTrader:
         df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time',
                                          'quote_volume', 'trades', 'taker_buy_base', 'taker_buy_quote', 'ignored'])
         df['close'] = pd.to_numeric(df['close'])
+        df['high'] = pd.to_numeric(df['high'])
+        df['low'] = pd.to_numeric(df['low'])
+        df['open'] = pd.to_numeric(df['open'])
         return df
 
     def calculate_trend(self, df):
@@ -256,6 +259,20 @@ class DynamicGridTrader:
         self.market_trend = trend
         return trend
 
+    def get_market_atr(self, interval='15m'):
+        """计算 15m K线 的ATR（真实波动幅度）"""
+        df = self.get_market_data(interval)
+        # Calculate True Range (TR)
+        tr = pd.DataFrame()
+        tr['h_l'] = df['high'] - df['low']
+        tr['h_pc'] = abs(df['high'] - df['close'].shift(1))
+        tr['l_pc'] = abs(df['low'] - df['close'].shift(1))
+        tr['tr'] = tr[['h_l', 'h_pc', 'l_pc']].max(axis=1)
+        
+        # Calculate ATR using exponential moving average
+        atr = tr['tr'].ewm(alpha=1/14, adjust=False).mean()
+        return atr.iloc[-2]
+
     def adjust_grid_parameters(self):
         """调整网格参数"""
         # 计算当前价格上下各一半网格价格
@@ -265,21 +282,23 @@ class DynamicGridTrader:
             self.current_grid = []
             
             # 根据系数调整网格间距
-            grid_gap = self.strategy['grid_gain'] * current_price * self.strategy['adjustment_factor']  #  单网格利润, 并按系数调整
-            self.grid_gap = grid_gap
+            grid_gap = self.strategy['grid_gain'] * current_price  #  获取预设的单网格利润
+            atr_gap = self.get_market_atr()
+            self.grid_gap = max(grid_gap, atr_gap)
 
             grids = self.strategy['grid_levels']//2
 
             for i in range(grids):
-                self.current_grid.append(current_price + grid_gap * (i+1))
-                self.current_grid.append(current_price - grid_gap * (i+1))
+                self.current_grid.append(current_price + self.grid_gap * (i+1))
+                self.current_grid.append(current_price - self.grid_gap * (i+1))
             
-            profit_per_grid_percent = (self.strategy['grid_gain'] - float(os.getenv('FEE_RATE', 0.001))*2) * 100  # 每格利润（扣除手续费）
+            profit_per_grid_percent = self.grid_gap/current_price - float(os.getenv('FEE_RATE', 0.001))*2  # 每格利润（扣除手续费）
+            profit_per_grid = profit_per_grid_percent * current_price * self.strategy['quantity_per_grid']
 
-            msg = f"调整网格(系数 {self.strategy['adjustment_factor']:.1f}):\n"
+            msg = f"调整网格\n"
             msg += f"当前价格: {current_price:.2f} USDT\n"
             msg += f"网格间隔: {self.grid_gap:.2f} USDT\n"
-            msg += f"每格利润: {profit_per_grid_percent:.2f}%"
+            msg += f"每格利润: {profit_per_grid:.2f} USDT ({profit_per_grid_percent*100:.2f}%)"
             self.logger.info(msg)
             send_telegram_message(msg)
             
