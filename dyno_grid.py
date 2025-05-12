@@ -651,8 +651,12 @@ class DynamicGridTrader:
 
         market_trend = self.get_market_trend()
         self.in_bull_market = market_trend >= 0
-        self.last_check_time = None
-        self.last_briefing_time = None
+        self.last_check_time = time.time()
+        self.last_briefing_time = time.time()
+        self.max_consecutive_buy_orders = 0
+        self.max_consecutive_sell_orders = 0
+        self.consecutive_buy_orders = 0
+        self.consecutive_sell_orders = 0
 
         price = self.get_current_price()
         self.daily_stats = {
@@ -726,7 +730,7 @@ class DynamicGridTrader:
                             self.enable_trading = False # 停止交易
                             self.cancel_all_orders()
                             self.close_position()
-                            send_telegram_message(f"以停止交易，需手动恢复！")
+                            send_telegram_message(f"已停止交易，需手动恢复！")
                         # 追低检查每半小时进行一次
                         elif self.get_buy_order_count() == 0 and self.should_adjust_grid():
                             # 买单耗尽，且需要调整网格(超过 2 个网格)，则追低
