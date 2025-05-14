@@ -4,6 +4,7 @@ cp sample.env .env
 
 - Config binance API and telegram API
 - Config parameters in gird settings
+- Config telegram bot
 
 python dyno_grid.py
 
@@ -11,23 +12,15 @@ Have fun!
 
 ## The Strategy
 
-- Grid trading is effective for crypto markets, but it can lead to significant losses during sharp price drops. This happens because the strategy accumulates too many positions, which may then be sold at lower prices as the grid continues to follow the downtrend.
+- 动态网格交易，使用 30m ATR（Average True Range）作为网格间距，每次调整网格时计算
 
-- To mitigate this risk, we set a stop-loss price to exit market. If the price drop reaches the stop-loss price, we promptly close positions and disable further trading, until a favorable market is detected again.
+- 最多20格，每格交易数量一致
 
-- Technical indicators like EMA and MACD can help identify market trends. MACD appears to perform better for this purpose. We use MACD golden cross signal for recovery trading.
+- 设置止损价格，当两个周期内（一个周期 8 小时），价格下落超过预设比例（默认 6%），则立即平仓停止交易。等待人工恢复。
 
-## The Details
+- 及时追高：卖单耗尽时立即补仓追高
 
-- Use 1-hour candlesticks for faster market responsiveness.
-
-- Set each grid to target a 0.5% profit to maximize trading opportunities.
-
-- Analyze market price and trends every hour and respond immediately if conditions change.
-
-- Review the grid setup every 8 hours to determine if adjustments are needed.
-
-- When a favorable trend is detected, pre-fill positions for 4 grid levels to ensure active participation.
+- 延迟追低：30 分钟检查，买单耗尽并价格低于网格超过 2 格，追低（平仓保留 4 格现货）
 
 ## Telegram Commands
 
