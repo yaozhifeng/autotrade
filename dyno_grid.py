@@ -272,7 +272,7 @@ class DynamicGridTrader:
             
             # 根据系数调整网格间距
             grid_gap = self.strategy['grid_gain'] * current_price  #  获取预设的单网格利润
-            atr_gap = self.get_market_atr()
+            atr_gap = self.get_market_atr(os.getenv('ATR_INTERVAL', '15m'))
             self.grid_gap = max(grid_gap, atr_gap) * self.strategy['adjustment_factor']  # 按系数调整网格间距
 
             grids = self.strategy['grid_levels']//2
