@@ -119,6 +119,9 @@ class DynamicGridTrader:
         fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * float(os.getenv('FEE_RATE', 0.001))
         net_profit = gross_margin - fee
 
+        # 计算止损价格
+        stop_loss_price = max(self.daily_stats['initial_price'], self.daily_stats['final_price']) * float(os.getenv('STOP_LOSS', 0.94))
+
         briefing_msg = (
             f"每日简报:\n"
             f"利润: {net_profit:.2f} USDT\n"
@@ -134,6 +137,7 @@ class DynamicGridTrader:
             f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
             f"最大连续买单: {self.max_consecutive_buy_orders}\n"
             f"最大连续卖单: {self.max_consecutive_sell_orders}\n"
+            f"止损价格: {stop_loss_price:.2f} USDT\n"
             f"统计周期: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         )
         send_telegram_message(briefing_msg)
