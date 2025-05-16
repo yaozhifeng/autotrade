@@ -43,6 +43,7 @@ class DynamicGridTrader:
             'quantity_per_grid': int(os.getenv('QUANTITY_PER_GRID', 18)), # 每个网格的交易数量
             'grid_gain': float(os.getenv('GRID_GAIN', 0.005)), # 单网格利润, 默认 0.5%
             'max_base_asset_grids': int(os.getenv('MAX_BASE_ASSET_GRIDS', 10)), # 最大持仓网格数量
+            'initial_position': float(os.getenv('INITIAL_POSITION', 4)), # 初始持仓网格数量
             'adjustment_factor': 1.0 # 网格间距调整系数
         }
 
@@ -178,7 +179,7 @@ class DynamicGridTrader:
                         self.enable_trading = True
                         self.in_bull_market = self.market_trend >= 0
                         self.cancel_all_orders()
-                        self.prepare_position(4)
+                        self.prepare_position(self.strategy['initial_position'])
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
                     elif text == '/chase': # 手动追高
@@ -540,7 +541,7 @@ class DynamicGridTrader:
         """追高，买入两个网格的现货，并重新调整网络"""
         try:
             self.cancel_all_orders() # 取消所有未成交订单
-            self.prepare_position(4)  # 准备两个网格的现货
+            self.prepare_position(self.strategy['initial_position']) 
             # 调整网格参数
             self.adjust_grid_parameters()
             self.place_grid_orders()
@@ -680,7 +681,7 @@ class DynamicGridTrader:
         }
         
         self.cancel_all_orders()
-        self.prepare_position(4)
+        self.prepare_position(self.strategy['initial_position'])
         self.adjust_grid_parameters()
         self.place_grid_orders()
 
@@ -696,7 +697,7 @@ class DynamicGridTrader:
         market_trend = self.get_market_trend()
         self.in_bull_market = market_trend >= 0
         self.enable_trading = True
-        self.prepare_position(4) # 初始化时，准备4个网格
+        self.prepare_position(self.strategy['initial_position']) # 初始仓位
         self.adjust_grid_parameters()
         self.place_grid_orders()
 
@@ -714,7 +715,7 @@ class DynamicGridTrader:
                         self.logger.info("卖单耗尽，追高")
                         send_telegram_message("卖单耗尽，追高")
                         self.cancel_all_orders()
-                        self.prepare_position(4) # 追高时，准备4个网格
+                        self.prepare_position(self.strategy['initial_position']) 
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
 
@@ -745,7 +746,7 @@ class DynamicGridTrader:
                             self.logger.info("买单耗尽，追低")
                             send_telegram_message("买单耗尽，追低")
                             self.cancel_all_orders()
-                            self.close_position(4) # 平仓保留4个网格
+                            self.close_position(self.strategy['initial_position']) # 平仓保留4个网格
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                         # 市场趋势判断，暂时不调整交易策略
