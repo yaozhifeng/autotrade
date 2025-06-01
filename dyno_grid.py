@@ -80,7 +80,8 @@ class DynamicGridTrader:
             'initial_price': price, # 本周期初始价格
             'last_price': price, # 上一周期初始价格
             'final_balance': 0.0, # 本周期最终余额
-            'final_price': 0.0 # 本周期最终价格
+            'final_price': 0.0, # 本周期最终价格
+            'highest_price_24h': price # 24小时内最高价格
         }
         # 连续买卖单跟踪
         self.consecutive_buy_orders = 0   # 连续买单数
@@ -120,7 +121,7 @@ class DynamicGridTrader:
         net_profit = gross_margin - fee
 
         # 计算止损价格
-        stop_loss_price = max(self.daily_stats['initial_price'], self.daily_stats['final_price']) * float(os.getenv('STOP_LOSS', 0.94))
+        stop_loss_price = self.daily_stats['highest_price_24h'] * float(os.getenv('STOP_LOSS', 0.92))
 
         briefing_msg = (
             f"每日简报:\n"
@@ -133,6 +134,7 @@ class DynamicGridTrader:
             f"平均卖出价格: {avg_sell_price:.2f} USDT\n"
             f"初始价格: {self.daily_stats['initial_price']:.2f} USDT\n"
             f"最终价格: {self.daily_stats['final_price']:.2f} USDT\n"
+            f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT\n"
             f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
             f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
             f"最大连续买单: {self.max_consecutive_buy_orders}\n"
@@ -154,7 +156,8 @@ class DynamicGridTrader:
             'initial_balance': self.get_total_balance(),
             'initial_price': self.get_current_price(),
             'final_balance': 0.0,
-            'final_price': 0.0
+            'final_price': 0.0,
+            'highest_price_24h': self.get_24h_highest_price()  # 重新获取真正的24小时最高价
         }
         self.last_briefing_time = time.time()
         # 重置最大连续买卖单数
@@ -266,6 +269,34 @@ class DynamicGridTrader:
         # Calculate ATR using exponential moving average
         atr = tr['tr'].ewm(alpha=1/14, adjust=False).mean()
         return atr.iloc[-2]
+
+    def get_24h_highest_price(self):
+        """获取真正的24小时最高价"""
+        try:
+            end_time = datetime.now()
+            start_time = end_time - timedelta(hours=24)
+            
+            # 获取24小时K线数据
+            klines = self.client.get_historical_klines(
+                self.symbol,
+                Client.KLINE_INTERVAL_1HOUR,
+                start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time.strftime("%Y-%m-%d %H:%M:%S")
+            )
+            
+            if not klines:
+                return self.get_current_price()
+            
+            # 转换为DataFrame并获取最高价
+            df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time',
+                                             'quote_volume', 'trades', 'taker_buy_base', 'taker_buy_quote', 'ignored'])
+            df['high'] = pd.to_numeric(df['high'])
+            
+            return float(df['high'].max())
+            
+        except Exception as e:
+            self.logger.error(f"获取24小时最高价失败: {str(e)}")
+            return self.daily_stats.get('highest_price_24h', self.get_current_price())
 
     def adjust_grid_parameters(self):
         """调整网格参数"""
@@ -681,7 +712,8 @@ class DynamicGridTrader:
             'initial_price': price, # 本周期初始价格
             'last_price': price, # 上一周期初始价格
             'final_balance': 0.0, # 本周期最终余额
-            'final_price': 0.0 # 本周期最终价格
+            'final_price': 0.0, # 本周期最终价格
+            'highest_price_24h': self.get_24h_highest_price() # 获取真正的24小时最高价格
         }
         
         self.cancel_all_orders()
@@ -727,15 +759,23 @@ class DynamicGridTrader:
                 if self.last_check_time is None or time.time() - self.last_check_time >= 1800:
                     market_trend = self.get_market_trend()
                     current_price = self.get_current_price()
-                    initial_price = self.daily_stats['initial_price']
-                    last_price = self.daily_stats['last_price']
+                    
+                    # 获取真正的24小时最高价格
+                    self.daily_stats['highest_price_24h'] = self.get_24h_highest_price()
+                    self.logger.info(f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT")
+                    
                     stop_loss = float(os.getenv('STOP_LOSS', 0.92)) # 止损比例
-                    stop_loss_price = max(initial_price, last_price) * stop_loss # 止损价格
-                    self.logger.info(f"当前价格: {current_price:.2f} USDT, 止损价格: {stop_loss_price:.2f} USDT")
+                    
+                    # 基于24小时最高价格的追踪止损
+                    stop_loss_price = self.daily_stats['highest_price_24h'] * stop_loss
+                    
+                    self.logger.info(f"当前价格: {current_price:.2f} USDT")
+                    self.logger.info(f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT") 
+                    self.logger.info(f"止损价格: {stop_loss_price:.2f} USDT")
 
                     if self.enable_trading:
-                        # 判断是否需要止损
-                        if current_price < stop_loss_price: # 如果价格低于前两个周期初始价格的达到止损比例，平仓止损, 停止交易等待价格回升
+                        # 判断是否需要止损 - 增加追踪止损检查
+                        if current_price < stop_loss_price:
                             self.in_bull_market = False # 标记熊市
                             self.logger.info("价格下跌超过止损比例，停止交易，等待市场回升")
                             send_telegram_message(f"价格下跌超过止损比例，停止交易，当前价格: {current_price:.2f} USDT")
