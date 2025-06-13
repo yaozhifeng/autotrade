@@ -81,8 +81,10 @@ class DynamicGridTrader:
             'last_price': price, # 上一周期初始价格
             'final_balance': 0.0, # 本周期最终余额
             'final_price': 0.0, # 本周期最终价格
-            'highest_price_24h': price # 24小时内最高价格
+            'highest_price_24h': self.get_24h_highest_price() # 24小时内最高价格
         }
+        self.stop_loss_price = self.daily_stats['highest_price_24h'] * float(os.getenv('STOP_LOSS', 0.92))
+
         # 连续买卖单跟踪
         self.consecutive_buy_orders = 0   # 连续买单数
         self.consecutive_sell_orders = 0  # 连续卖单数
@@ -120,9 +122,6 @@ class DynamicGridTrader:
         fee = (self.daily_stats['total_buy_price'] + self.daily_stats['total_sell_price']) * float(os.getenv('FEE_RATE', 0.001))
         net_profit = gross_margin - fee
 
-        # 计算止损价格
-        stop_loss_price = self.daily_stats['highest_price_24h'] * float(os.getenv('STOP_LOSS', 0.92))
-
         briefing_msg = (
             f"每日简报:\n"
             f"利润: {net_profit:.2f} USDT\n"
@@ -135,11 +134,11 @@ class DynamicGridTrader:
             f"初始价格: {self.daily_stats['initial_price']:.2f} USDT\n"
             f"最终价格: {self.daily_stats['final_price']:.2f} USDT\n"
             f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT\n"
+            f"止损价格: {self.stop_loss_price:.2f} USDT\n"
             f"初始余额: {self.daily_stats['initial_balance']:.2f} USDT\n"
             f"最终余额: {self.daily_stats['final_balance']:.2f} USDT\n"
             f"最大连续买单: {self.max_consecutive_buy_orders}\n"
             f"最大连续卖单: {self.max_consecutive_sell_orders}\n"
-            f"止损价格: {stop_loss_price:.2f} USDT\n"
             f"统计周期: {datetime.fromtimestamp(self.last_briefing_time).strftime('%Y-%m-%d %H:%M:%S')} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         )
         send_telegram_message(briefing_msg)
@@ -159,6 +158,7 @@ class DynamicGridTrader:
             'final_price': 0.0,
             'highest_price_24h': self.get_24h_highest_price()  # 重新获取真正的24小时最高价
         }
+        self.stop_loss_price = self.daily_stats['highest_price_24h'] * float(os.getenv('STOP_LOSS', 0.92))
         self.last_briefing_time = time.time()
         # 重置最大连续买卖单数
         self.max_consecutive_buy_orders = 0
@@ -715,11 +715,25 @@ class DynamicGridTrader:
             'final_price': 0.0, # 本周期最终价格
             'highest_price_24h': self.get_24h_highest_price() # 获取真正的24小时最高价格
         }
+        self.stop_loss_price = self.daily_stats['highest_price_24h'] * float(os.getenv('STOP_LOSS', 0.92))
         
         self.cancel_all_orders()
         self.prepare_position(self.strategy['initial_position'])
         self.adjust_grid_parameters()
         self.place_grid_orders()
+
+    def check_stop_loss(self):
+        """检查是否要止损"""
+        if self.enable_trading:
+            current_price = self.get_current_price()
+            if current_price < self.stop_loss_price:
+                self.in_bull_market = False # 标记熊市
+                self.logger.info("价格下跌超过止损比例，停止交易，等待市场回升")
+                send_telegram_message(f"价格下跌超过止损比例，停止交易，当前价格: {current_price:.2f} USDT")
+                self.enable_trading = False # 停止交易
+                self.cancel_all_orders()
+                self.close_position()
+                send_telegram_message(f"已停止交易，需手动恢复！")
 
     def run(self):
         """运行动态网格交易机器人"""
@@ -739,6 +753,9 @@ class DynamicGridTrader:
 
         while True:
             try:
+                # 检查是否要止损
+                self.check_stop_loss()
+                
                 # 检查订单状态
                 self.process_grid()
                 
@@ -755,37 +772,17 @@ class DynamicGridTrader:
                         self.adjust_grid_parameters()
                         self.place_grid_orders()
 
-                # 每半小时检查市场趋势，看是否需要平仓止损，或调整交易规则
-                if self.last_check_time is None or time.time() - self.last_check_time >= 1800:
-                    market_trend = self.get_market_trend()
-                    current_price = self.get_current_price()
+                    # 每半小时检查市场趋势，看是否需要平仓止损，或调整交易规则
+                    if self.last_check_time is None or time.time() - self.last_check_time >= 1800:
+                        market_trend = self.get_market_trend()
                     
-                    # 获取真正的24小时最高价格
-                    self.daily_stats['highest_price_24h'] = self.get_24h_highest_price()
-                    self.logger.info(f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT")
+                        # 更新24小时最高价格
+                        self.daily_stats['highest_price_24h'] = self.get_24h_highest_price()
+                        self.stop_loss_price = self.daily_stats['highest_price_24h'] * float(os.getenv('STOP_LOSS', 0.92))
+                        self.logger.info(f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT, 止损价格: {self.stop_loss_price:.2f} USDT")
                     
-                    stop_loss = float(os.getenv('STOP_LOSS', 0.92)) # 止损比例
-                    
-                    # 基于24小时最高价格的追踪止损
-                    stop_loss_price = self.daily_stats['highest_price_24h'] * stop_loss
-                    
-                    self.logger.info(f"当前价格: {current_price:.2f} USDT")
-                    self.logger.info(f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT") 
-                    self.logger.info(f"止损价格: {stop_loss_price:.2f} USDT")
-
-                    if self.enable_trading:
-                        # 判断是否需要止损 - 增加追踪止损检查
-                        if current_price < stop_loss_price:
-                            self.in_bull_market = False # 标记熊市
-                            self.logger.info("价格下跌超过止损比例，停止交易，等待市场回升")
-                            send_telegram_message(f"价格下跌超过止损比例，停止交易，当前价格: {current_price:.2f} USDT")
-                            self.stop_loss_price = current_price
-                            self.enable_trading = False # 停止交易
-                            self.cancel_all_orders()
-                            self.close_position()
-                            send_telegram_message(f"已停止交易，需手动恢复！")
                         # 追低检查每半小时进行一次
-                        elif self.get_buy_order_count() == 0 and self.should_adjust_grid():
+                        if self.get_buy_order_count() == 0 and self.should_adjust_grid():
                             # 买单耗尽，且需要调整网格(超过 2 个网格)，则追低
                             self.logger.info("买单耗尽，追低")
                             send_telegram_message("买单耗尽，追低")
@@ -805,14 +802,11 @@ class DynamicGridTrader:
                                 self.logger.info("牛转熊，继续交易")
                                 send_telegram_message("牛转熊，继续交易")
 
-                    else: # not trading
-                        # 不自动重启交易，可以用 /adjust 指令重启
-                        pass
 
-                # 检查是否需要发送每日简报
-                briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
-                if self.enable_trading and (time.time() - self.last_briefing_time >= briefing_interval):
-                    self.send_daily_briefing()
+                    # 检查是否需要发送每日简报
+                    briefing_interval = int(os.getenv('BRIEFING_INTERVAL', 86400))  # Default to 24 hours
+                    if time.time() - self.last_briefing_time >= briefing_interval:
+                        self.send_daily_briefing()
                     
                 time.sleep(10)
             except KeyboardInterrupt:
