@@ -787,7 +787,7 @@ class DynamicGridTrader:
                             self.logger.info("买单耗尽，追低")
                             send_telegram_message("买单耗尽，追低")
                             self.cancel_all_orders()
-                            self.close_position(8) # 平仓保留8个网格, 只加 2 个买单网格
+                            self.close_position(self.strategy['max_position'] - 2) # 平仓保留 max_position - 2 个网格, 只加 2 个买单网格
                             self.adjust_grid_parameters()
                             self.place_grid_orders()
                         # 市场趋势判断，暂时不调整交易策略
@@ -795,12 +795,12 @@ class DynamicGridTrader:
                             if not self.in_bull_market: # 之前是熊市，转到牛市交易规则
                                 self.in_bull_market = True # 标记牛市
                                 self.logger.info("熊转牛，继续交易")
-                                send_telegram_message("熊转牛，继续交易")
+                                # send_telegram_message("熊转牛，继续交易")
                         elif market_trend < 0: # 如果市场趋势向下，平仓保留少量网格，继续交易
                             if self.in_bull_market: #刚从牛市转换到熊市
                                 self.in_bull_market = False # 标记熊市
                                 self.logger.info("牛转熊，继续交易")
-                                send_telegram_message("牛转熊，继续交易")
+                                # send_telegram_message("牛转熊，继续交易")
 
 
                     # 检查是否需要发送每日简报
