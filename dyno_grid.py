@@ -754,7 +754,7 @@ class DynamicGridTrader:
         while True:
             try:
                 # 检查是否要止损
-                self.check_stop_loss()
+                # self.check_stop_loss()
                 
                 # 检查订单状态
                 self.process_grid()
@@ -782,14 +782,14 @@ class DynamicGridTrader:
                         self.logger.info(f"24小时最高价: {self.daily_stats['highest_price_24h']:.2f} USDT, 止损价格: {self.stop_loss_price:.2f} USDT")
                     
                         # 追低检查每半小时进行一次
-                        if self.get_buy_order_count() == 0 and self.should_adjust_grid():
-                            # 买单耗尽，且需要调整网格(超过 2 个网格)，则追低
-                            self.logger.info("买单耗尽，追低")
-                            send_telegram_message("买单耗尽，追低")
-                            self.cancel_all_orders()
-                            self.close_position(self.strategy['max_position'] - 2) # 平仓保留 max_position - 2 个网格, 只加 2 个买单网格
-                            self.adjust_grid_parameters()
-                            self.place_grid_orders()
+                        # if self.get_buy_order_count() == 0 and self.should_adjust_grid():
+                        #     # 买单耗尽，且需要调整网格(超过 2 个网格)，则追低
+                        #     self.logger.info("买单耗尽，追低")
+                        #     send_telegram_message("买单耗尽，追低")
+                        #     self.cancel_all_orders()
+                        #     self.close_position(self.strategy['max_position'] - 2) # 平仓保留 max_position - 2 个网格, 只加 2 个买单网格
+                        #     self.adjust_grid_parameters()
+                        #     self.place_grid_orders()
                         # 市场趋势判断，暂时不调整交易策略
                         if market_trend > 0: # 如果市场趋势向上，牛市交易
                             if not self.in_bull_market: # 之前是熊市，转到牛市交易规则
